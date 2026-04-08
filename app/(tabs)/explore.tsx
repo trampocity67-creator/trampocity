@@ -1,7 +1,8 @@
 import {
-  ActivityIndicator, Alert, ScrollView, StyleSheet,
+  ActivityIndicator, Alert, Platform, ScrollView, StyleSheet,
   Text, TouchableOpacity, View,
 } from 'react-native';
+import { supabase } from '../../supabase';
 import { useClient } from '../../context/ClientContext';
 import { calculerNiveau } from '../../lib/utils';
 
@@ -20,7 +21,24 @@ const RECOMPENSES: Recompense[] = [
   { nom: 'Accès VIP 2h', desc: 'Zone exclusive + boisson', points: 2000, emoji: '⭐', bg: '#FAEEDA' },
 ];
 
-import { supabase } from '../../supabase';
+function alerter(titre: string, message: string) {
+  if (Platform.OS === 'web') {
+    window.alert(`${titre}\n${message}`);
+  } else {
+    Alert.alert(titre, message);
+  }
+}
+
+function confirmer(message: string, onConfirm: () => void) {
+  if (Platform.OS === 'web') {
+    if (window.confirm(message)) onConfirm();
+  } else {
+    Alert.alert('🎁 Confirmer', message, [
+      { text: 'Annuler', style: 'cancel' },
+      { text: 'Confirmer', onPress: onConfirm },
+    ]);
+  }
+}
 
 export default function RewardsScreen() {
   const { client, loading, refresh } = useClient();
@@ -29,45 +47,38 @@ export default function RewardsScreen() {
     if (!client) return;
 
     if (client.points < recompense.points) {
-      Alert.alert(
+      alerter(
         'Points insuffisants',
         `Il vous faut encore ${(recompense.points - client.points).toLocaleString('fr-FR')} pts.`
       );
       return;
     }
 
-    Alert.alert(
-      '🎁 Confirmer',
+    confirmer(
       `Utiliser "${recompense.nom}" pour ${recompense.points} pts ?`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Confirmer',
-          onPress: async () => {
-            const nouveauxPoints = client.points - recompense.points;
+      async () => {
+        const nouveauxPoints = client.points - recompense.points;
 
-            const [insertRes, updateRes] = await Promise.all([
-              supabase.from('recompenses_utilisees').insert({
-                client_id: client.id,
-                recompense_nom: recompense.nom,
-                points_depenses: recompense.points,
-              }),
-              supabase.from('clients').update({
-                points: nouveauxPoints,
-                niveau: calculerNiveau(nouveauxPoints),
-              }).eq('id', client.id),
-            ]);
+        const [insertRes, updateRes] = await Promise.all([
+          supabase.from('recompenses_utilisees').insert({
+            client_id: client.id,
+            recompense_nom: recompense.nom,
+            points_depenses: recompense.points,
+          }),
+          supabase.from('clients').update({
+            points: nouveauxPoints,
+            niveau: calculerNiveau(nouveauxPoints),
+          }).eq('id', client.id),
+        ]);
 
-            if (insertRes.error || updateRes.error) {
-              Alert.alert('Erreur', "Impossible d'utiliser la récompense. Réessayez.");
-              return;
-            }
+        if (insertRes.error || updateRes.error) {
+          alerter('Erreur', "Impossible d'utiliser la récompense. Réessayez.");
+          return;
+        }
 
-            await refresh();
-            Alert.alert('✅ Récompense activée !', `Profitez de votre ${recompense.nom} !`);
-          },
-        },
-      ]
+        await refresh();
+        alerter('✅ Récompense activée !', `Profitez de votre ${recompense.nom} !`);
+      }
     );
   }
 

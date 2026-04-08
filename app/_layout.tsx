@@ -1,40 +1,30 @@
-import { Stack, router, useSegments } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 
 export default function RootLayout() {
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
-  const segments = useSegments();
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION') {
+        // Premier chargement : on sait si on est connecté ou non
+        setReady(true);
+        if (!session) router.replace('/login');
+        // Si session existante, expo-router charge l'URL courante (qui est '/' par défaut)
+      } else if (event === 'SIGNED_IN') {
+        router.replace('/');
+      } else if (event === 'SIGNED_OUT') {
+        router.replace('/login');
+      }
+      // TOKEN_REFRESHED, USER_UPDATED, etc. → ignorés, pas de redirect
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  useEffect(() => {
-    if (loading) return;
-
-    const onLoginPage = segments[0] === 'login';
-
-    if (!session && !onLoginPage) {
-      router.replace('/login');
-    } else if (session && onLoginPage) {
-      router.replace('/');
-    }
-  }, [session, loading, segments]);
-
-  if (loading) {
+  if (!ready) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
         <ActivityIndicator size="large" color="#6C3CE1" />

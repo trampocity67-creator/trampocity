@@ -48,31 +48,26 @@ export function ClientProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
-    // Chargement initial
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user?.email) {
-        chargerDonnees(session.user.email);
-      } else {
-        setLoading(false);
-      }
-    });
-
-    // Réagir à chaque changement d'auth (connexion / déconnexion)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user?.email) {
-        setLoading(true);
-        chargerDonnees(session.user.email);
-      } else {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+        if (session?.user?.email) {
+          setLoading(true);
+          chargerDonnees(session.user.email);
+        } else {
+          setLoading(false);
+        }
+      } else if (event === 'SIGNED_OUT') {
         setClient(null);
         setSessions([]);
         setLoading(false);
       }
+      // TOKEN_REFRESHED, USER_UPDATED → session déjà valide, pas de rechargement
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  // Abonnements temps réel
+  // Abonnements temps réel — mis à jour dès que l'ID client est connu
   useEffect(() => {
     if (!client?.id) return;
 
