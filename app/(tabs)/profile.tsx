@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { supabase } from '../../supabase';
@@ -7,28 +8,19 @@ import { initiales } from '../../lib/utils';
 
 export default function ProfileScreen() {
   const { client, loading } = useClient();
+  const [infoExpanded, setInfoExpanded] = useState(false);
 
   async function seDeconnecter() {
+    const doSignOut = async () => { await supabase.auth.signOut(); };
+    // La redirection vers /login est gérée par _layout.tsx via SIGNED_OUT
+
     if (Platform.OS === 'web') {
-      if (!window.confirm('Voulez-vous vraiment vous déconnecter ?')) return;
-      await supabase.auth.signOut();
-      router.replace('/login');
+      if (window.confirm('Voulez-vous vraiment vous déconnecter ?')) doSignOut();
     } else {
-      Alert.alert(
-        'Se déconnecter',
-        'Voulez-vous vraiment vous déconnecter ?',
-        [
-          { text: 'Annuler', style: 'cancel' },
-          {
-            text: 'Déconnecter',
-            style: 'destructive',
-            onPress: async () => {
-              await supabase.auth.signOut();
-              router.replace('/login');
-            },
-          },
-        ]
-      );
+      Alert.alert('Se déconnecter', 'Voulez-vous vraiment vous déconnecter ?', [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Déconnecter', style: 'destructive', onPress: doSignOut },
+      ]);
     }
   }
 
@@ -40,13 +32,11 @@ export default function ProfileScreen() {
     );
   }
 
-  const ini = initiales(client?.nom ?? '');
-
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{ini}</Text>
+          <Text style={styles.avatarText}>{initiales(client?.nom ?? '')}</Text>
         </View>
         <View style={styles.headerInfo}>
           <Text style={styles.name}>{client?.nom}</Text>
@@ -82,31 +72,27 @@ export default function ProfileScreen() {
 
         <Text style={styles.sectionTitle}>Mon compte</Text>
 
-        <TouchableOpacity style={styles.menuItem}>
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => setInfoExpanded(v => !v)}
+          activeOpacity={0.8}>
           <Text style={styles.menuIcon}>👤</Text>
           <Text style={styles.menuText}>Informations personnelles</Text>
-          <Text style={styles.menuArrow}>›</Text>
+          <Text style={styles.menuArrow}>{infoExpanded ? '∨' : '›'}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.menuItem}>
-          <Text style={styles.menuIcon}>🔔</Text>
-          <Text style={styles.menuText}>Notifications</Text>
-          <Text style={styles.menuArrow}>›</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.menuItem}>
-          <Text style={styles.menuIcon}>👨‍👩‍👧</Text>
-          <Text style={styles.menuText}>Parrainer un ami (+200 pts)</Text>
-          <Text style={styles.menuArrow}>›</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.menuItem}>
-          <Text style={styles.menuIcon}>📋</Text>
-          <Text style={styles.menuText}>Historique complet</Text>
-          <Text style={styles.menuArrow}>›</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.menuItem}>
-          <Text style={styles.menuIcon}>❓</Text>
-          <Text style={styles.menuText}>Aide & contact</Text>
-          <Text style={styles.menuArrow}>›</Text>
-        </TouchableOpacity>
+
+        {infoExpanded && (
+          <View style={styles.infoCard}>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLbl}>Nom</Text>
+              <Text style={styles.infoVal}>{client?.nom}</Text>
+            </View>
+            <View style={[styles.infoRow, styles.infoRowLast]}>
+              <Text style={styles.infoLbl}>Email</Text>
+              <Text style={styles.infoVal}>{client?.email}</Text>
+            </View>
+          </View>
+        )}
 
         {client?.is_admin && (
           <TouchableOpacity style={styles.adminBtn} onPress={() => router.push('/admin')} activeOpacity={0.8}>
@@ -166,6 +152,17 @@ const styles = StyleSheet.create({
   menuIcon: { fontSize: 18 },
   menuText: { fontSize: 14, color: '#1a1a1a', flex: 1 },
   menuArrow: { fontSize: 18, color: '#888' },
+  infoCard: {
+    backgroundColor: '#fff', borderRadius: 12, borderWidth: 0.5,
+    borderColor: '#ddd', marginBottom: 8, overflow: 'hidden',
+  },
+  infoRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    padding: 14, borderBottomWidth: 0.5, borderBottomColor: '#f0f0f0',
+  },
+  infoRowLast: { borderBottomWidth: 0 },
+  infoLbl: { fontSize: 13, color: '#888' },
+  infoVal: { fontSize: 13, color: '#1a1a1a', fontWeight: '500', flex: 1, textAlign: 'right' },
   adminBtn: {
     backgroundColor: '#1a1a2e', borderRadius: 12, padding: 14,
     alignItems: 'center', marginTop: 8, marginBottom: 8,

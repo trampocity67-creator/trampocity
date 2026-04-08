@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat c:/Users/trampo_city1/trampocity/constants/*.ts)"
+    ]
+  }
+}

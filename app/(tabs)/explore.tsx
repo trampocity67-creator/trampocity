@@ -112,8 +112,9 @@ export default function RewardsScreen() {
                   <Text style={styles.rewardCost}>{r.points.toLocaleString('fr-FR')} pts</Text>
                   <TouchableOpacity
                     style={[styles.btn, !suffisant && styles.btnLocked]}
-                    onPress={() => utiliserRecompense(r)}
-                    activeOpacity={0.8}>
+                    onPress={() => suffisant && utiliserRecompense(r)}
+                    activeOpacity={suffisant ? 0.8 : 1}
+                    disabled={!suffisant}>
                     <Text style={[styles.btnText, !suffisant && styles.btnLockedText]}>
                       {suffisant ? 'Utiliser' : 'Insuffisant'}
                     </Text>

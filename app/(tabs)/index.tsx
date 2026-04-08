@@ -20,8 +20,21 @@ export default function HomeScreen() {
     );
   }
 
-  const pourcent = client ? Math.min((client.points / 2000) * 100, 100) : 0;
-  const pointsManquants = Math.max(0, 2000 - (client?.points ?? 0));
+  const pts = client?.points ?? 0;
+  const niveauxSeuils = [
+    { nom: 'Argent', seuil: 500 },
+    { nom: 'Or', seuil: 1000 },
+    { nom: 'Platine', seuil: 2000 },
+  ];
+  const prochain = niveauxSeuils.find(n => pts < n.seuil);
+  const seuilPrecedent = prochain
+    ? (niveauxSeuils[niveauxSeuils.indexOf(prochain) - 1]?.seuil ?? 0)
+    : 2000;
+  const seuilProchain = prochain?.seuil ?? 2000;
+  const pourcent = prochain
+    ? Math.min(((pts - seuilPrecedent) / (seuilProchain - seuilPrecedent)) * 100, 100)
+    : 100;
+  const pointsManquants = prochain ? seuilProchain - pts : 0;
 
   return (
     <ScrollView style={styles.container}>
@@ -35,10 +48,10 @@ export default function HomeScreen() {
           <View style={styles.barBg}>
             <View style={[styles.barFill, { width: `${pourcent}%` }]} />
           </View>
-          {pointsManquants > 0 ? (
-            <Text style={styles.pointsNext}>{pointsManquants} pts jusqu'au niveau Platine</Text>
+          {prochain ? (
+            <Text style={styles.pointsNext}>{pointsManquants} pts jusqu'au niveau {prochain.nom}</Text>
           ) : (
-            <Text style={styles.pointsNext}>🏆 Vous êtes au niveau maximum !</Text>
+            <Text style={styles.pointsNext}>🏆 Niveau maximum atteint !</Text>
           )}
         </View>
       </View>
