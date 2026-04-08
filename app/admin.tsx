@@ -4,6 +4,17 @@ import {
   ActivityIndicator, Alert, Platform, ScrollView, StyleSheet,
   Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
+import { supabase } from '../supabase';
+import { Client } from '../lib/types';
+import { calculerNiveau, niveauCouleur, initiales } from '../lib/utils';
+
+function alerter(titre: string, message: string) {
+  if (Platform.OS === 'web') {
+    window.alert(`${titre}\n${message}`);
+  } else {
+    Alert.alert(titre, message);
+  }
+}
 
 function confirmer(titre: string, message: string, onConfirm: () => void) {
   if (Platform.OS === 'web') {
@@ -15,9 +26,6 @@ function confirmer(titre: string, message: string, onConfirm: () => void) {
     ]);
   }
 }
-import { supabase } from '../supabase';
-import { Client } from '../lib/types';
-import { calculerNiveau, niveauCouleur, initiales } from '../lib/utils';
 
 export default function AdminScreen() {
   const [clients, setClients] = useState<Client[]>([]);
@@ -28,6 +36,17 @@ export default function AdminScreen() {
   useEffect(() => {
     verifierAdmin();
   }, []);
+
+  useEffect(() => {
+    const q = recherche.toLowerCase().trim();
+    setClientsFiltres(
+      q === ''
+        ? clients
+        : clients.filter(c =>
+            c.nom.toLowerCase().includes(q) || c.email.toLowerCase().includes(q)
+          )
+    );
+  }, [recherche, clients]);
 
   async function verifierAdmin() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -47,17 +66,6 @@ export default function AdminScreen() {
     chargerClients();
   }
 
-  useEffect(() => {
-    const q = recherche.toLowerCase().trim();
-    setClientsFiltres(
-      q === ''
-        ? clients
-        : clients.filter(c =>
-            c.nom.toLowerCase().includes(q) || c.email.toLowerCase().includes(q)
-          )
-    );
-  }, [recherche, clients]);
-
   async function chargerClients() {
     const { data, error } = await supabase
       .from('clients')
@@ -65,7 +73,7 @@ export default function AdminScreen() {
       .order('points', { ascending: false });
 
     if (error) {
-      Alert.alert('Erreur', 'Impossible de charger les clients.');
+      alerter('Erreur', 'Impossible de charger les clients.');
       setLoading(false);
       return;
     }
@@ -93,15 +101,11 @@ export default function AdminScreen() {
         ]);
 
         if (sessionRes.error || updateRes.error) {
-          Alert.alert('Erreur', 'La mise à jour a échoué. Réessayez.');
+          alerter('Erreur', 'La mise à jour a échoué. Réessayez.');
           return;
         }
 
-        if (Platform.OS === 'web') {
-          window.alert(`✅ Fait ! ${client.nom} a maintenant ${nouveauxPoints.toLocaleString('fr-FR')} pts`);
-        } else {
-          Alert.alert('✅ Fait !', `${client.nom} a maintenant ${nouveauxPoints.toLocaleString('fr-FR')} pts`);
-        }
+        alerter('✅ Fait !', `${client.nom} a maintenant ${nouveauxPoints.toLocaleString('fr-FR')} pts`);
         chargerClients();
       }
     );

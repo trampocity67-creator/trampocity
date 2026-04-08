@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
+  ActivityIndicator, KeyboardAvoidingView, Platform,
   ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { supabase } from '../supabase';
@@ -12,6 +12,7 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [isRegister, setIsRegister] = useState(false);
   const [nom, setNom] = useState('');
+  const [erreur, setErreur] = useState<string | null>(null);
 
   function validerFormulaire(): string | null {
     if (isRegister && nom.trim().length < 2) return 'Veuillez entrer votre nom complet.';
@@ -21,27 +22,29 @@ export default function LoginScreen() {
   }
 
   async function handleLogin() {
-    const erreur = validerFormulaire();
-    if (erreur) { Alert.alert('Champ invalide', erreur); return; }
+    setErreur(null);
+    const err = validerFormulaire();
+    if (err) { setErreur(err); return; }
 
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setLoading(false);
 
     if (error) {
-      Alert.alert('Erreur de connexion', 'Email ou mot de passe incorrect.');
+      setErreur('Email ou mot de passe incorrect.');
     }
     // La redirection est gérée par _layout.tsx via onAuthStateChange
   }
 
   async function handleRegister() {
-    const erreur = validerFormulaire();
-    if (erreur) { Alert.alert('Champ invalide', erreur); return; }
+    setErreur(null);
+    const err = validerFormulaire();
+    if (err) { setErreur(err); return; }
 
     setLoading(true);
     const { data, error } = await supabase.auth.signUp({ email: email.trim(), password });
     if (error) {
-      Alert.alert('Erreur', error.message);
+      setErreur(error.message);
       setLoading(false);
       return;
     }
@@ -54,7 +57,6 @@ export default function LoginScreen() {
       niveau: 'Bronze',
     });
 
-    Alert.alert('✅ Compte créé !', 'Bienvenue sur Trampocity !');
     setLoading(false);
     // La redirection est gérée par _layout.tsx via onAuthStateChange
   }
@@ -64,6 +66,7 @@ export default function LoginScreen() {
     setEmail('');
     setPassword('');
     setNom('');
+    setErreur(null);
   }
 
   return (
@@ -111,6 +114,12 @@ export default function LoginScreen() {
             onSubmitEditing={isRegister ? handleRegister : handleLogin}
           />
 
+          {erreur && (
+            <View style={styles.erreurBox}>
+              <Text style={styles.erreurText}>⚠️ {erreur}</Text>
+            </View>
+          )}
+
           <TouchableOpacity
             style={[styles.btn, loading && styles.btnDisabled]}
             onPress={isRegister ? handleRegister : handleLogin}
@@ -145,6 +154,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff', borderRadius: 12, borderWidth: 0.5,
     borderColor: '#ddd', padding: 14, fontSize: 15, color: '#1a1a1a',
   },
+  erreurBox: {
+    backgroundColor: '#FDECEA', borderRadius: 10, padding: 12,
+    borderWidth: 0.5, borderColor: '#F5C6C4',
+  },
+  erreurText: { color: '#C0392B', fontSize: 13 },
   btn: { backgroundColor: '#6C3CE1', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 6 },
   btnDisabled: { opacity: 0.6 },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '500' },
