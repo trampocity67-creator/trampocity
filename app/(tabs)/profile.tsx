@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { supabase } from '../../supabase';
 import { useClient } from '../../context/ClientContext';
@@ -9,21 +9,27 @@ export default function ProfileScreen() {
   const { client, loading } = useClient();
 
   async function seDeconnecter() {
-    Alert.alert(
-      'Se déconnecter',
-      'Voulez-vous vraiment vous déconnecter ?',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Déconnecter',
-          style: 'destructive',
-          onPress: async () => {
-            await supabase.auth.signOut();
-            router.replace('/login');
+    if (Platform.OS === 'web') {
+      if (!window.confirm('Voulez-vous vraiment vous déconnecter ?')) return;
+      await supabase.auth.signOut();
+      router.replace('/login');
+    } else {
+      Alert.alert(
+        'Se déconnecter',
+        'Voulez-vous vraiment vous déconnecter ?',
+        [
+          { text: 'Annuler', style: 'cancel' },
+          {
+            text: 'Déconnecter',
+            style: 'destructive',
+            onPress: async () => {
+              await supabase.auth.signOut();
+              router.replace('/login');
+            },
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   }
 
   if (loading) {

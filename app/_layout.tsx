@@ -1,5 +1,6 @@
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { useEffect, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 
@@ -20,19 +21,29 @@ export default function RootLayout() {
     return () => subscription.unsubscribe();
   }, []);
 
-  if (loading) return null;
+  useEffect(() => {
+    if (loading) return;
+    if (session) {
+      router.replace('/');
+    } else {
+      router.replace('/login');
+    }
+  }, [session, loading]);
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
+        <ActivityIndicator size="large" color="#6C3CE1" />
+      </View>
+    );
+  }
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      {session ? (
-        <>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="admin" />
-          <Stack.Screen name="scanner" />
-        </>
-      ) : (
-        <Stack.Screen name="login" />
-      )}
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="admin" />
+      <Stack.Screen name="scanner" />
+      <Stack.Screen name="login" />
     </Stack>
   );
 }
