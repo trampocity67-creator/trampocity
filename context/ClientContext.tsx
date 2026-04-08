@@ -1,9 +1,3 @@
-/**
- * ClientContext — état global du client connecté avec mises à jour en temps réel.
- *
- * Pour activer le temps réel, activez la réplication dans Supabase Dashboard :
- *   Database → Replication → cochez les tables "clients" et "sessions".
- */
 import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../supabase';
 import { Client, Session } from '../lib/types';
@@ -27,14 +21,11 @@ export function ClientProvider({ children }: { children: React.ReactNode }) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
 
-  async function chargerDonnees() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setLoading(false); return; }
-
+  async function chargerDonnees(email: string) {
     const { data: clientData, error } = await supabase
       .from('clients')
       .select('*')
-      .eq('email', user.email)
+      .eq('email', email)
       .single();
 
     if (error || !clientData) { setLoading(false); return; }
@@ -51,11 +42,37 @@ export function ClientProvider({ children }: { children: React.ReactNode }) {
     setLoading(false);
   }
 
+  async function refresh() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.email) await chargerDonnees(user.email);
+  }
+
   useEffect(() => {
-    chargerDonnees();
+    // Chargement initial
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.email) {
+        chargerDonnees(session.user.email);
+      } else {
+        setLoading(false);
+      }
+    });
+
+    // Réagir à chaque changement d'auth (connexion / déconnexion)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user?.email) {
+        setLoading(true);
+        chargerDonnees(session.user.email);
+      } else {
+        setClient(null);
+        setSessions([]);
+        setLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  // Abonnements temps réel — les points et sessions se mettent à jour automatiquement
+  // Abonnements temps réel
   useEffect(() => {
     if (!client?.id) return;
 
@@ -79,7 +96,7 @@ export function ClientProvider({ children }: { children: React.ReactNode }) {
   }, [client?.id]);
 
   return (
-    <ClientContext.Provider value={{ client, sessions, loading, refresh: chargerDonnees }}>
+    <ClientContext.Provider value={{ client, sessions, loading, refresh }}>
       {children}
     </ClientContext.Provider>
   );

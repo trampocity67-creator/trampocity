@@ -1,9 +1,20 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator, Alert, ScrollView, StyleSheet,
+  ActivityIndicator, Alert, Platform, ScrollView, StyleSheet,
   Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
+
+function confirmer(titre: string, message: string, onConfirm: () => void) {
+  if (Platform.OS === 'web') {
+    if (window.confirm(`${titre}\n${message}`)) onConfirm();
+  } else {
+    Alert.alert(titre, message, [
+      { text: 'Annuler', style: 'cancel' },
+      { text: 'Confirmer', onPress: onConfirm },
+    ]);
+  }
+}
 import { supabase } from '../supabase';
 import { Client } from '../lib/types';
 import { calculerNiveau, niveauCouleur, initiales } from '../lib/utils';
@@ -62,63 +73,54 @@ export default function AdminScreen() {
     setLoading(false);
   }
 
-  async function ajouterPoints(client: Client, montant: number) {
-    Alert.alert(
+  function ajouterPoints(client: Client, montant: number) {
+    confirmer(
       '➕ Ajouter des points',
       `Ajouter ${montant} pts à ${client.nom} ?`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Confirmer',
-          onPress: async () => {
-            const nouveauxPoints = client.points + montant;
+      async () => {
+        const nouveauxPoints = client.points + montant;
 
-            const [sessionRes, updateRes] = await Promise.all([
-              supabase.from('sessions').insert({
-                client_id: client.id,
-                points_gagnes: montant,
-                description: 'Session trampoline',
-              }),
-              supabase.from('clients').update({
-                points: nouveauxPoints,
-                niveau: calculerNiveau(nouveauxPoints),
-              }).eq('id', client.id),
-            ]);
+        const [sessionRes, updateRes] = await Promise.all([
+          supabase.from('sessions').insert({
+            client_id: client.id,
+            points_gagnes: montant,
+            description: 'Session trampoline',
+          }),
+          supabase.from('clients').update({
+            points: nouveauxPoints,
+            niveau: calculerNiveau(nouveauxPoints),
+          }).eq('id', client.id),
+        ]);
 
-            if (sessionRes.error || updateRes.error) {
-              Alert.alert('Erreur', 'La mise à jour a échoué. Réessayez.');
-              return;
-            }
+        if (sessionRes.error || updateRes.error) {
+          Alert.alert('Erreur', 'La mise à jour a échoué. Réessayez.');
+          return;
+        }
 
-            Alert.alert('✅ Fait !', `${client.nom} a maintenant ${nouveauxPoints.toLocaleString('fr-FR')} pts`);
-            chargerClients();
-          },
-        },
-      ]
+        if (Platform.OS === 'web') {
+          window.alert(`✅ Fait ! ${client.nom} a maintenant ${nouveauxPoints.toLocaleString('fr-FR')} pts`);
+        } else {
+          Alert.alert('✅ Fait !', `${client.nom} a maintenant ${nouveauxPoints.toLocaleString('fr-FR')} pts`);
+        }
+        chargerClients();
+      }
     );
   }
 
-  async function retirerPoints(client: Client) {
-    Alert.alert(
+  function retirerPoints(client: Client) {
+    confirmer(
       '➖ Retirer des points',
       `Retirer 200 pts à ${client.nom} ?`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Confirmer',
-          style: 'destructive',
-          onPress: async () => {
-            const nouveauxPoints = Math.max(0, client.points - 200);
+      async () => {
+        const nouveauxPoints = Math.max(0, client.points - 200);
 
-            await supabase.from('clients').update({
-              points: nouveauxPoints,
-              niveau: calculerNiveau(nouveauxPoints),
-            }).eq('id', client.id);
+        await supabase.from('clients').update({
+          points: nouveauxPoints,
+          niveau: calculerNiveau(nouveauxPoints),
+        }).eq('id', client.id);
 
-            chargerClients();
-          },
-        },
-      ]
+        chargerClients();
+      }
     );
   }
 

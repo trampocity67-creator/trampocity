@@ -1,4 +1,3 @@
-import { router } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
@@ -31,9 +30,8 @@ export default function LoginScreen() {
 
     if (error) {
       Alert.alert('Erreur de connexion', 'Email ou mot de passe incorrect.');
-    } else {
-      router.replace('/(tabs)');
     }
+    // La redirection est gérée par _layout.tsx via onAuthStateChange
   }
 
   async function handleRegister() {
@@ -57,8 +55,8 @@ export default function LoginScreen() {
     });
 
     Alert.alert('✅ Compte créé !', 'Bienvenue sur Trampocity !');
-    router.replace('/(tabs)');
     setLoading(false);
+    // La redirection est gérée par _layout.tsx via onAuthStateChange
   }
 
   function basculerMode() {

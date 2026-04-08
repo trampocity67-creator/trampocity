@@ -1,4 +1,4 @@
-import { Stack, router } from 'expo-router';
+import { Stack, router, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import type { Session } from '@supabase/supabase-js';
@@ -7,6 +7,7 @@ import { supabase } from '../supabase';
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const segments = useSegments();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -23,12 +24,15 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (loading) return;
-    if (session) {
-      router.replace('/');
-    } else {
+
+    const onLoginPage = segments[0] === 'login';
+
+    if (!session && !onLoginPage) {
       router.replace('/login');
+    } else if (session && onLoginPage) {
+      router.replace('/');
     }
-  }, [session, loading]);
+  }, [session, loading, segments]);
 
   if (loading) {
     return (
