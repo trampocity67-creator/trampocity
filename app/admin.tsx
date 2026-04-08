@@ -15,8 +15,26 @@ export default function AdminScreen() {
   const [recherche, setRecherche] = useState('');
 
   useEffect(() => {
-    chargerClients();
+    verifierAdmin();
   }, []);
+
+  async function verifierAdmin() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { router.replace('/'); return; }
+
+    const { data } = await supabase
+      .from('clients')
+      .select('is_admin')
+      .eq('email', user.email)
+      .single();
+
+    if (!data?.is_admin) {
+      router.replace('/');
+      return;
+    }
+
+    chargerClients();
+  }
 
   useEffect(() => {
     const q = recherche.toLowerCase().trim();

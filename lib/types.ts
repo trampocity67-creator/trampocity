@@ -4,6 +4,7 @@ export interface Client {
   email: string;
   points: number;
   niveau: string;
+  is_admin?: boolean;
   created_at?: string;
 }
 

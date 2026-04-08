@@ -102,9 +102,11 @@ export default function ProfileScreen() {
           <Text style={styles.menuArrow}>›</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.adminBtn} onPress={() => router.push('/admin')} activeOpacity={0.8}>
-          <Text style={styles.adminText}>📊 Dashboard Admin</Text>
-        </TouchableOpacity>
+        {client?.is_admin && (
+          <TouchableOpacity style={styles.adminBtn} onPress={() => router.push('/admin')} activeOpacity={0.8}>
+            <Text style={styles.adminText}>📊 Dashboard Admin</Text>
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity style={styles.logoutBtn} onPress={seDeconnecter} activeOpacity={0.8}>
           <Text style={styles.logoutText}>🚪 Se déconnecter</Text>
