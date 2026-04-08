@@ -1,30 +1,39 @@
 import { Stack, router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 
 export default function RootLayout() {
-  const [ready, setReady] = useState(false);
+  // undefined = en cours de chargement | null = pas de session | Session = connecté
+  const [session, setSession] = useState<Session | null | undefined>(undefined);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'INITIAL_SESSION') {
-        // Premier chargement : on sait si on est connecté ou non
-        setReady(true);
-        if (!session) router.replace('/login');
-        // Si session existante, expo-router charge l'URL courante (qui est '/' par défaut)
+        setSession(session ?? null);
       } else if (event === 'SIGNED_IN') {
-        router.replace('/');
+        setSession(session);
       } else if (event === 'SIGNED_OUT') {
-        router.replace('/login');
+        setSession(null);
       }
-      // TOKEN_REFRESHED, USER_UPDATED, etc. → ignorés, pas de redirect
+      // TOKEN_REFRESHED, USER_UPDATED → ignorés, pas de redirect
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  if (!ready) {
+  // Redirect dans un useEffect séparé : s'exécute APRÈS que la Stack soit montée
+  useEffect(() => {
+    if (session === undefined) return; // chargement en cours, Stack pas encore rendue
+    if (session) {
+      router.replace('/');
+    } else {
+      router.replace('/login');
+    }
+  }, [session]);
+
+  if (session === undefined) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
         <ActivityIndicator size="large" color="#6C3CE1" />
