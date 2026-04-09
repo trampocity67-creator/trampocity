@@ -3,19 +3,27 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
+import { initOneSignal, loginOneSignal, logoutOneSignal } from '../lib/onesignal';
 
 export default function RootLayout() {
   // undefined = en cours de chargement | null = pas de session | Session = connecté
   const [session, setSession] = useState<Session | null | undefined>(undefined);
 
   useEffect(() => {
+    initOneSignal();
+  }, []);
+
+  useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'INITIAL_SESSION') {
         setSession(session ?? null);
+        if (session?.user?.id) loginOneSignal(session.user.id);
       } else if (event === 'SIGNED_IN') {
         setSession(session);
+        if (session?.user?.id) loginOneSignal(session.user.id);
       } else if (event === 'SIGNED_OUT') {
         setSession(null);
+        logoutOneSignal();
       }
       // TOKEN_REFRESHED, USER_UPDATED → ignorés, pas de redirect
     });
