@@ -9,16 +9,6 @@ import { Client } from '../lib/types';
 import { calculerNiveau, niveauCouleur, initiales } from '../lib/utils';
 import { envoyerNotification } from '../lib/onesignal';
 
-const TYPES_SESSION = [
-  'Main court',
-  'Ninja court',
-  'Cageball',
-  'Dodgeball',
-  'Zone pro',
-  'Zone mur',
-  'Anniversaire',
-];
-
 function alerter(titre: string, message: string) {
   if (Platform.OS === 'web') {
     window.alert(`${titre}\n${message}`);
@@ -47,7 +37,6 @@ export default function AdminScreen() {
   const [onglet, setOnglet] = useState<'tous' | 'inactifs'>('tous');
   const [notifOuverte, setNotifOuverte] = useState<string | null>(null);
   const [notifTexte, setNotifTexte] = useState('');
-  const [typeSession, setTypeSession] = useState(TYPES_SESSION[0]);
 
   useEffect(() => {
     verifierAdmin();
@@ -121,7 +110,7 @@ export default function AdminScreen() {
   function ajouterPoints(client: Client, montant: number) {
     confirmer(
       '➕ Ajouter des points',
-      `Ajouter ${montant} pts à ${client.nom} ? (${typeSession})`,
+      `Ajouter ${montant} pts à ${client.nom} ?`,
       async () => {
         const nouveauxPoints = client.points + montant;
 
@@ -129,7 +118,7 @@ export default function AdminScreen() {
           supabase.from('sessions').insert({
             client_id: client.id,
             points_gagnes: montant,
-            description: typeSession,
+            description: 'Entrée Trampo City',
           }),
           supabase.from('clients').update({
             points: nouveauxPoints,
@@ -319,22 +308,6 @@ export default function AdminScreen() {
         </View>
       </View>
 
-      {/* Sélecteur de type de session */}
-      <View style={styles.typeSessionWrap}>
-        <Text style={styles.typeSessionLabel}>Type de session</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.typeSessionList}>
-          {TYPES_SESSION.map(t => (
-            <TouchableOpacity
-              key={t}
-              style={[styles.typeChip, typeSession === t && styles.typeChipActif]}
-              onPress={() => setTypeSession(t)}
-              activeOpacity={0.8}>
-              <Text style={[styles.typeChipText, typeSession === t && styles.typeChipTextActif]}>{t}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
       <View style={styles.ongletRow}>
         <TouchableOpacity
           style={[styles.onglet, onglet === 'tous' && styles.ongletActif]}
@@ -403,17 +376,6 @@ const styles = StyleSheet.create({
   },
   statVal: { fontSize: 18, fontWeight: '500', color: '#E31E24' },
   statLbl: { fontSize: 10, color: '#888', marginTop: 2 },
-  // Type de session
-  typeSessionWrap: { paddingHorizontal: 16, paddingTop: 12 },
-  typeSessionLabel: { fontSize: 10, fontWeight: '600', color: '#888', letterSpacing: 0.5, marginBottom: 6 },
-  typeSessionList: { gap: 8, paddingBottom: 2 },
-  typeChip: {
-    borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6,
-    backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd',
-  },
-  typeChipActif: { backgroundColor: '#E31E24', borderColor: '#E31E24' },
-  typeChipText: { fontSize: 12, color: '#555', fontWeight: '500' },
-  typeChipTextActif: { color: '#fff' },
   // Onglets
   ongletRow: {
     flexDirection: 'row', marginHorizontal: 16, marginTop: 12,
