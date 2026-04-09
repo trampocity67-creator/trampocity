@@ -16,9 +16,9 @@ export default async function handler(req: Request): Promise<Response> {
     return json({ error: 'Method not allowed' }, 405);
   }
 
-  const restKey = process.env.EXPO_PUBLIC_ONESIGNAL_REST_KEY ?? '';
+  const restKey = process.env.ONESIGNAL_REST_KEY ?? '';
   if (!restKey) {
-    console.error('[notify] EXPO_PUBLIC_ONESIGNAL_REST_KEY non configurée dans Vercel');
+    console.error('[notify] ONESIGNAL_REST_KEY non configurée dans Vercel');
     return json({ error: 'Configuration serveur manquante' }, 500);
   }
 
