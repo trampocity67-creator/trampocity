@@ -37,7 +37,7 @@ export default async function handler(req: Request): Promise<Response> {
   const payload = {
     app_id: ONESIGNAL_APP_ID,
     target_channel: 'push',
-    include_aliases: { external_id: [userId] },
+    include_external_user_ids: [userId],
     headings: { fr: titre, en: titre },
     contents: { fr: message, en: message },
   };
@@ -46,10 +46,10 @@ export default async function handler(req: Request): Promise<Response> {
 
   let osRes: Response;
   try {
-    osRes = await fetch('https://api.onesignal.com/notifications', {
+    osRes = await fetch('https://onesignal.com/api/v1/notifications', {
       method: 'POST',
       headers: {
-        Authorization: `Key ${restKey}`,
+        Authorization: `Basic ${restKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
