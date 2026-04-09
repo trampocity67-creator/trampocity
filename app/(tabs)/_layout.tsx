@@ -7,7 +7,7 @@ export default function TabLayout() {
     <ClientProvider>
       <Tabs
         screenOptions={{
-          tabBarActiveTintColor: '#6C3CE1',
+          tabBarActiveTintColor: '#E31E24',
           tabBarInactiveTintColor: '#888',
           tabBarStyle: {
             backgroundColor: '#fff',

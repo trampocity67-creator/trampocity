@@ -30,7 +30,7 @@ function ScannerWeb() {
     setLoading(false);
 
     if (error || !data) {
-      window.alert('QR code non reconnu\nCe code ne correspond à aucun client Trampocity.');
+      window.alert('QR code non reconnu\nCe code ne correspond à aucun client TRAMPO CITY.');
       return;
     }
 
@@ -45,7 +45,7 @@ function ScannerWeb() {
       supabase.from('sessions').insert({
         client_id: client.id,
         points_gagnes: montant,
-        description: `Session trampoline ${montant === 150 ? '1h' : '2h'}`,
+        description: `Main court ${montant === 150 ? '1h' : '2h'}`,
       }),
       supabase.from('clients').update({
         points: nouveauxPoints,
@@ -87,10 +87,10 @@ function ScannerWeb() {
         <Text style={styles.question}>Quelle session valider ?</Text>
 
         <TouchableOpacity style={styles.btn} onPress={() => valider(150)} activeOpacity={0.8}>
-          <Text style={styles.btnText}>🏀 +150 pts — Session 1h</Text>
+          <Text style={styles.btnText}>🎯 +150 pts — Session 1h</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.btn} onPress={() => valider(300)} activeOpacity={0.8}>
-          <Text style={styles.btnText}>🏀 +300 pts — Session 2h</Text>
+          <Text style={styles.btnText}>🎯 +300 pts — Session 2h</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.btnAnnuler} onPress={() => { setClient(null); setIdInput(''); }} activeOpacity={0.8}>
           <Text style={styles.btnAnnulerText}>Annuler</Text>
@@ -184,7 +184,7 @@ function ScannerMobile() {
     if (error || !clientData) {
       Alert.alert(
         'QR code non reconnu',
-        'Ce code ne correspond à aucun client Trampocity.',
+        'Ce code ne correspond à aucun client TRAMPO CITY.',
         [{ text: 'Réessayer', onPress: () => setScanned(false) }]
       );
       return;
@@ -204,7 +204,7 @@ function ScannerMobile() {
       supabase.from('sessions').insert({
         client_id: client.id,
         points_gagnes: montant,
-        description: `Session trampoline ${montant === 150 ? '1h' : '2h'}`,
+        description: `Main court ${montant === 150 ? '1h' : '2h'}`,
       }),
       supabase.from('clients').update({
         points: nouveauxPoints,
@@ -281,10 +281,10 @@ function ScannerMobile() {
           <Text style={styles.question}>Quelle session valider ?</Text>
 
           <TouchableOpacity style={styles.btn} onPress={() => valider(150)} activeOpacity={0.8}>
-            <Text style={styles.btnText}>🏀 +150 pts — Session 1h</Text>
+            <Text style={styles.btnText}>🎯 +150 pts — Session 1h</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.btn} onPress={() => valider(300)} activeOpacity={0.8}>
-            <Text style={styles.btnText}>🏀 +300 pts — Session 2h</Text>
+            <Text style={styles.btnText}>🎯 +300 pts — Session 2h</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.btnAnnuler} onPress={annuler} activeOpacity={0.8}>
             <Text style={styles.btnAnnulerText}>Annuler</Text>
@@ -297,14 +297,14 @@ function ScannerMobile() {
 
 const styles = StyleSheet.create({
   // Mobile camera
-  container: { flex: 1, backgroundColor: '#000' },
+  container: { flex: 1, backgroundColor: '#0D0D0D' },
   camera: { flex: 1 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   backBtn: { margin: 24, marginTop: 60 },
   backText: { color: '#fff', fontSize: 16 },
   scanArea: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   cadre: { width: 240, height: 240, position: 'relative', marginBottom: 24 },
-  coin: { position: 'absolute', width: 40, height: 40, borderColor: '#6C3CE1', borderWidth: 4 },
+  coin: { position: 'absolute', width: 40, height: 40, borderColor: '#E31E24', borderWidth: 4 },
   tl: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 8 },
   tr: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 8 },
   bl: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 8 },
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
   permissionIcon: { fontSize: 48 },
   permissionTitle: { fontSize: 20, fontWeight: '500', color: '#1a1a1a' },
   permissionDesc: { fontSize: 14, color: '#888', textAlign: 'center' },
-  lien: { color: '#6C3CE1', fontSize: 14 },
+  lien: { color: '#E31E24', fontSize: 14 },
   // Client modal (shared)
   modalPage: { flex: 1, backgroundColor: '#f7f7f5', padding: 24, paddingTop: 60, gap: 12 },
   clientCard: {
@@ -327,17 +327,17 @@ const styles = StyleSheet.create({
   },
   avatar: {
     width: 64, height: 64, borderRadius: 32,
-    backgroundColor: '#EEEDfe', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#FDEAEA', alignItems: 'center', justifyContent: 'center',
   },
-  avatarText: { fontSize: 22, fontWeight: '500', color: '#6C3CE1' },
+  avatarText: { fontSize: 22, fontWeight: '500', color: '#E31E24' },
   clientNom: { fontSize: 20, fontWeight: '500', color: '#1a1a1a' },
   clientEmail: { fontSize: 13, color: '#888' },
   infoRow: { flexDirection: 'row', gap: 12, width: '100%', marginTop: 8 },
   infoCard: { flex: 1, backgroundColor: '#f7f7f5', borderRadius: 12, padding: 12, alignItems: 'center' },
-  infoVal: { fontSize: 20, fontWeight: '500', color: '#6C3CE1' },
+  infoVal: { fontSize: 20, fontWeight: '500', color: '#E31E24' },
   infoLbl: { fontSize: 11, color: '#888', marginTop: 2 },
   question: { fontSize: 14, color: '#888', textAlign: 'center' },
-  btn: { backgroundColor: '#6C3CE1', borderRadius: 12, padding: 16, alignItems: 'center' },
+  btn: { backgroundColor: '#E31E24', borderRadius: 12, padding: 16, alignItems: 'center' },
   btnDisabled: { opacity: 0.5 },
   btnText: { color: '#fff', fontSize: 15, fontWeight: '500' },
   btnAnnuler: {

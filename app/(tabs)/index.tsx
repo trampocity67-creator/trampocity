@@ -8,13 +8,19 @@ const NIVEAUX = [
   { emoji: '💎', nom: 'Platine', pts: '2 000 pts' },
 ];
 
+const HORAIRES_NORMAL = [
+  { jours: 'Mer · Sam · Dim', heure: '10h – 21h', ferme: false },
+  { jours: 'Jeu · Ven', heure: '16h – 21h', ferme: false },
+  { jours: 'Lun · Mar', heure: 'Fermé', ferme: true },
+];
+
 export default function HomeScreen() {
   const { client, sessions, loading } = useClient();
 
   if (loading) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator size="large" color="#6C3CE1" />
+        <ActivityIndicator size="large" color="#E31E24" />
         <Text style={styles.loadingText}>Chargement...</Text>
       </View>
     );
@@ -39,14 +45,14 @@ export default function HomeScreen() {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.logo}>🏀 Trampocity</Text>
+        <Text style={styles.logo}>🎯 TRAMPO CITY</Text>
         <Text style={styles.greeting}>Bonjour, {client?.nom?.split(' ')[0]} ! 👋</Text>
         <View style={styles.pointsCard}>
           <Text style={styles.pointsLabel}>MES POINTS</Text>
           <Text style={styles.pointsValue}>{client?.points?.toLocaleString('fr-FR')}</Text>
           <Text style={styles.pointsSub}>Niveau {client?.niveau} ⭐</Text>
           <View style={styles.barBg}>
-            <View style={[styles.barFill, { width: `${pourcent}%` }]} />
+            <View style={[styles.barFill, { width: `${pourcent}%` as any }]} />
           </View>
           {prochain ? (
             <Text style={styles.pointsNext}>{pointsManquants} pts jusqu'au niveau {prochain.nom}</Text>
@@ -63,6 +69,35 @@ export default function HomeScreen() {
             Vos points sont ajoutés par notre équipe après chaque session.
             Présentez votre QR code en caisse !
           </Text>
+        </View>
+
+        {/* Horaires */}
+        <View style={styles.hoursCard}>
+          <Text style={styles.hoursTitle}>🕐 Horaires</Text>
+
+          <View style={styles.hoursSection}>
+            <Text style={styles.hoursSectionLabel}>HORS VACANCES SCOLAIRES</Text>
+            {HORAIRES_NORMAL.map(h => (
+              <View key={h.jours} style={styles.hoursRow}>
+                <Text style={styles.hoursDay}>{h.jours}</Text>
+                <Text style={[styles.hoursTime, h.ferme && styles.hoursFerme]}>{h.heure}</Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.hoursDivider} />
+
+          <View style={styles.hoursSection}>
+            <Text style={styles.hoursSectionLabel}>VACANCES SCOLAIRES</Text>
+            <View style={styles.hoursRow}>
+              <Text style={styles.hoursDay}>Tous les jours</Text>
+              <Text style={styles.hoursTime}>10h – 21h</Text>
+            </View>
+          </View>
+
+          <View style={styles.hoursBadge}>
+            <Text style={styles.hoursBadgeText}>Dernière séance à 19h45</Text>
+          </View>
         </View>
 
         <View style={styles.niveauxCard}>
@@ -82,17 +117,17 @@ export default function HomeScreen() {
 
         {sessions.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyIcon}>🏀</Text>
+            <Text style={styles.emptyIcon}>🎯</Text>
             <Text style={styles.emptyText}>Pas encore de sessions</Text>
             <Text style={styles.emptyDesc}>
-              Venez sauter chez Trampocity et gagnez vos premiers points !
+              Venez sauter chez TRAMPO CITY et gagnez vos premiers points !
             </Text>
           </View>
         ) : (
           sessions.map((s) => (
             <View key={s.id} style={styles.activityItem}>
-              <View style={[styles.activityIcon, { backgroundColor: s.points_gagnes > 0 ? '#EAF3DE' : '#FAECE7' }]}>
-                <Text>{s.points_gagnes > 0 ? '🏀' : '🎁'}</Text>
+              <View style={[styles.activityIcon, { backgroundColor: s.points_gagnes > 0 ? '#FDEAEA' : '#FAECE7' }]}>
+                <Text>{s.points_gagnes > 0 ? '🎯' : '🎁'}</Text>
               </View>
               <View style={styles.activityInfo}>
                 <Text style={styles.activityName}>{s.description}</Text>
@@ -117,8 +152,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f7f7f5' },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   loadingText: { color: '#888', fontSize: 14 },
-  header: { backgroundColor: '#6C3CE1', padding: 24, paddingTop: 60 },
-  logo: { color: '#fff', fontSize: 14, opacity: 0.85, marginBottom: 4 },
+  header: { backgroundColor: '#E31E24', padding: 24, paddingTop: 60 },
+  logo: { color: '#fff', fontSize: 14, opacity: 0.85, marginBottom: 4, fontWeight: '600' },
   greeting: { color: '#fff', fontSize: 20, fontWeight: '500', marginBottom: 20 },
   pointsCard: {
     backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 16, padding: 16,
@@ -132,11 +167,34 @@ const styles = StyleSheet.create({
   pointsNext: { color: '#fff', fontSize: 11, opacity: 0.75, marginTop: 5 },
   body: { padding: 16 },
   infoCard: {
-    backgroundColor: '#E6F1FB', borderRadius: 12, padding: 14,
+    backgroundColor: '#FDEAEA', borderRadius: 12, padding: 14,
     flexDirection: 'row', gap: 10, marginBottom: 16, alignItems: 'center',
+    borderWidth: 0.5, borderColor: '#F5C6C4',
   },
   infoIcon: { fontSize: 20 },
-  infoText: { flex: 1, fontSize: 12, color: '#185FA5', lineHeight: 18 },
+  infoText: { flex: 1, fontSize: 12, color: '#C0392B', lineHeight: 18 },
+  // Horaires
+  hoursCard: {
+    backgroundColor: '#fff', borderRadius: 14, borderWidth: 0.5,
+    borderColor: '#ddd', padding: 14, marginBottom: 16,
+  },
+  hoursTitle: { fontSize: 13, fontWeight: '600', color: '#1a1a1a', marginBottom: 12 },
+  hoursSection: { gap: 6 },
+  hoursSectionLabel: {
+    fontSize: 9, fontWeight: '600', color: '#E31E24',
+    letterSpacing: 0.8, marginBottom: 4,
+  },
+  hoursRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  hoursDay: { fontSize: 13, color: '#1a1a1a' },
+  hoursTime: { fontSize: 13, fontWeight: '500', color: '#1a1a1a' },
+  hoursFerme: { color: '#aaa' },
+  hoursDivider: { height: 0.5, backgroundColor: '#f0f0f0', marginVertical: 10 },
+  hoursBadge: {
+    backgroundColor: '#FDEAEA', borderRadius: 8, padding: 8,
+    alignItems: 'center', marginTop: 10,
+  },
+  hoursBadgeText: { fontSize: 11, color: '#E31E24', fontWeight: '600' },
+  // Niveaux
   niveauxCard: {
     backgroundColor: '#fff', borderRadius: 14, borderWidth: 0.5,
     borderColor: '#ddd', padding: 14, marginBottom: 20,
@@ -149,7 +207,7 @@ const styles = StyleSheet.create({
   niveauRowLast: { borderBottomWidth: 0 },
   niveauEmoji: { fontSize: 18, width: 30 },
   niveauNom: { flex: 1, fontSize: 13, color: '#1a1a1a' },
-  niveauPts: { fontSize: 12, color: '#6C3CE1', fontWeight: '500' },
+  niveauPts: { fontSize: 12, color: '#E31E24', fontWeight: '500' },
   sectionTitle: {
     fontSize: 12, fontWeight: '500', color: '#888',
     textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10,

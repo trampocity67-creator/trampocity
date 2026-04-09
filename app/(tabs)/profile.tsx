@@ -12,7 +12,6 @@ export default function ProfileScreen() {
 
   async function seDeconnecter() {
     const doSignOut = async () => { await supabase.auth.signOut(); };
-    // La redirection vers /login est gérée par _layout.tsx via SIGNED_OUT
 
     if (Platform.OS === 'web') {
       if (window.confirm('Voulez-vous vraiment vous déconnecter ?')) doSignOut();
@@ -27,7 +26,7 @@ export default function ProfileScreen() {
   if (loading) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator size="large" color="#6C3CE1" />
+        <ActivityIndicator size="large" color="#E31E24" />
       </View>
     );
   }
@@ -50,9 +49,9 @@ export default function ProfileScreen() {
           <Text style={styles.qrDesc}>Présentez ce code en caisse pour valider votre session</Text>
           <View style={styles.qrWrap}>
             <QRCode
-              value={client?.id ?? 'trampocity'}
+              value={client?.id ?? 'trampo-city'}
               size={180}
-              color="#1a1a2e"
+              color="#0D0D0D"
               backgroundColor="white"
             />
           </View>
@@ -94,6 +93,17 @@ export default function ProfileScreen() {
           </View>
         )}
 
+        <Text style={[styles.sectionTitle, { marginTop: 12 }]}>Nous trouver</Text>
+
+        <View style={styles.adresseCard}>
+          <Text style={styles.adresseIcon}>📍</Text>
+          <View style={styles.adresseInfo}>
+            <Text style={styles.adresseNom}>TRAMPO CITY Strasbourg</Text>
+            <Text style={styles.adresseRue}>5 Rue Alexandre Dumas</Text>
+            <Text style={styles.adresseVille}>67200 Strasbourg</Text>
+          </View>
+        </View>
+
         {client?.is_admin && (
           <TouchableOpacity style={styles.adminBtn} onPress={() => router.push('/admin')} activeOpacity={0.8}>
             <Text style={styles.adminText}>📊 Dashboard Admin</Text>
@@ -112,7 +122,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f7f7f5' },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: {
-    backgroundColor: '#6C3CE1', padding: 24, paddingTop: 60,
+    backgroundColor: '#E31E24', padding: 24, paddingTop: 60,
     flexDirection: 'row', alignItems: 'center', gap: 14,
   },
   avatar: {
@@ -163,8 +173,18 @@ const styles = StyleSheet.create({
   infoRowLast: { borderBottomWidth: 0 },
   infoLbl: { fontSize: 13, color: '#888' },
   infoVal: { fontSize: 13, color: '#1a1a1a', fontWeight: '500', flex: 1, textAlign: 'right' },
+  adresseCard: {
+    backgroundColor: '#fff', borderRadius: 12, borderWidth: 0.5,
+    borderColor: '#ddd', padding: 14, marginBottom: 8,
+    flexDirection: 'row', alignItems: 'flex-start', gap: 12,
+  },
+  adresseIcon: { fontSize: 20, marginTop: 2 },
+  adresseInfo: { flex: 1 },
+  adresseNom: { fontSize: 13, fontWeight: '600', color: '#1a1a1a' },
+  adresseRue: { fontSize: 13, color: '#444', marginTop: 2 },
+  adresseVille: { fontSize: 13, color: '#444' },
   adminBtn: {
-    backgroundColor: '#1a1a2e', borderRadius: 12, padding: 14,
+    backgroundColor: '#0D0D0D', borderRadius: 12, padding: 14,
     alignItems: 'center', marginTop: 8, marginBottom: 8,
   },
   adminText: { color: '#fff', fontSize: 14, fontWeight: '500' },

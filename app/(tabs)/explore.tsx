@@ -15,9 +15,9 @@ interface Recompense {
 }
 
 const RECOMPENSES: Recompense[] = [
-  { nom: 'Boisson offerte', desc: 'Au bar de Trampocity', points: 200, emoji: '🥤', bg: '#EAF3DE' },
+  { nom: 'Boisson offerte', desc: 'Au bar de TRAMPO CITY', points: 200, emoji: '🥤', bg: '#EAF3DE' },
   { nom: 'Chaussettes grip', desc: 'Paire de chaussettes premium', points: 400, emoji: '🧦', bg: '#FBEAF0' },
-  { nom: 'Entrée 1h offerte', desc: 'Valable en semaine', points: 800, emoji: '🎟️', bg: '#E6F1FB' },
+  { nom: 'Entrée 1h offerte', desc: 'Valable en semaine', points: 800, emoji: '🎟️', bg: '#FDEAEA' },
   { nom: 'Accès VIP 2h', desc: 'Zone exclusive + boisson', points: 2000, emoji: '⭐', bg: '#FAEEDA' },
 ];
 
@@ -85,7 +85,7 @@ export default function RewardsScreen() {
   if (loading) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator size="large" color="#6C3CE1" />
+        <ActivityIndicator size="large" color="#E31E24" />
       </View>
     );
   }
@@ -132,7 +132,7 @@ export default function RewardsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f7f7f5' },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  header: { backgroundColor: '#6C3CE1', padding: 24, paddingTop: 60 },
+  header: { backgroundColor: '#E31E24', padding: 24, paddingTop: 60 },
   title: { color: '#fff', fontSize: 22, fontWeight: '500' },
   sub: { color: '#fff', fontSize: 13, opacity: 0.85, marginTop: 4 },
   body: { flex: 1 },
@@ -147,9 +147,9 @@ const styles = StyleSheet.create({
   rewardName: { fontSize: 13, fontWeight: '500', color: '#1a1a1a' },
   rewardDesc: { fontSize: 11, color: '#888', marginTop: 3 },
   rewardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
-  rewardCost: { fontSize: 13, fontWeight: '500', color: '#6C3CE1' },
-  btn: { borderWidth: 1.5, borderColor: '#6C3CE1', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5 },
-  btnText: { fontSize: 11, color: '#6C3CE1', fontWeight: '500' },
+  rewardCost: { fontSize: 13, fontWeight: '500', color: '#E31E24' },
+  btn: { borderWidth: 1.5, borderColor: '#E31E24', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5 },
+  btnText: { fontSize: 11, color: '#E31E24', fontWeight: '500' },
   btnLocked: { borderColor: '#ddd' },
   btnLockedText: { color: '#888' },
 });

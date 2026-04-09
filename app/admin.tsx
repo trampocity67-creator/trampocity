@@ -9,6 +9,16 @@ import { Client } from '../lib/types';
 import { calculerNiveau, niveauCouleur, initiales } from '../lib/utils';
 import { envoyerNotification } from '../lib/onesignal';
 
+const TYPES_SESSION = [
+  'Main court',
+  'Ninja court',
+  'Cageball',
+  'Dodgeball',
+  'Zone pro',
+  'Zone mur',
+  'Anniversaire',
+];
+
 function alerter(titre: string, message: string) {
   if (Platform.OS === 'web') {
     window.alert(`${titre}\n${message}`);
@@ -37,6 +47,7 @@ export default function AdminScreen() {
   const [onglet, setOnglet] = useState<'tous' | 'inactifs'>('tous');
   const [notifOuverte, setNotifOuverte] = useState<string | null>(null);
   const [notifTexte, setNotifTexte] = useState('');
+  const [typeSession, setTypeSession] = useState(TYPES_SESSION[0]);
 
   useEffect(() => {
     verifierAdmin();
@@ -86,7 +97,6 @@ export default function AdminScreen() {
     const allClients = (clientsRes.data || []) as Client[];
     setClients(allClients);
 
-    // Clients inactifs = pas de session depuis > 14 jours
     const sessions = sessionsRes.data || [];
     const deuxSemainesAvant = new Date();
     deuxSemainesAvant.setDate(deuxSemainesAvant.getDate() - 14);
@@ -111,7 +121,7 @@ export default function AdminScreen() {
   function ajouterPoints(client: Client, montant: number) {
     confirmer(
       '➕ Ajouter des points',
-      `Ajouter ${montant} pts à ${client.nom} ?`,
+      `Ajouter ${montant} pts à ${client.nom} ? (${typeSession})`,
       async () => {
         const nouveauxPoints = client.points + montant;
 
@@ -119,7 +129,7 @@ export default function AdminScreen() {
           supabase.from('sessions').insert({
             client_id: client.id,
             points_gagnes: montant,
-            description: 'Session trampoline',
+            description: typeSession,
           }),
           supabase.from('clients').update({
             points: nouveauxPoints,
@@ -132,11 +142,10 @@ export default function AdminScreen() {
           return;
         }
 
-        // Notification push au client
         await envoyerNotification(
           client.id,
-          'Trampocity 🤸',
-          `Vous avez gagné ${montant} points ! Solde : ${nouveauxPoints.toLocaleString('fr-FR')} points 🤸`,
+          'TRAMPO CITY 🎯',
+          `Vous avez gagné ${montant} points ! Solde : ${nouveauxPoints.toLocaleString('fr-FR')} points 🎯`,
         );
 
         alerter('✅ Fait !', `${client.nom} a maintenant ${nouveauxPoints.toLocaleString('fr-FR')} pts`);
@@ -165,7 +174,7 @@ export default function AdminScreen() {
   async function envoyerNotifPerso(client: Client) {
     const msg = notifTexte.trim();
     if (!msg) return;
-    await envoyerNotification(client.id, 'Trampocity 🤸', msg);
+    await envoyerNotification(client.id, 'TRAMPO CITY 🎯', msg);
     alerter('✅ Envoyé', `Notification envoyée à ${client.nom}`);
     setNotifOuverte(null);
     setNotifTexte('');
@@ -175,7 +184,7 @@ export default function AdminScreen() {
     const prenom = client.nom.split(' ')[0];
     await envoyerNotification(
       client.id,
-      'Trampocity vous manque ! 🤸',
+      'TRAMPO CITY vous manque ! 🎯',
       `Salut ${prenom} ! Ça fait un moment qu'on ne vous a pas vu. Revenez sauter, ${client.points.toLocaleString('fr-FR')} pts vous attendent ! 🎉`,
     );
     alerter('✅ Envoyé', `Notification de relance envoyée à ${client.nom}`);
@@ -188,7 +197,7 @@ export default function AdminScreen() {
   if (loading) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator size="large" color="#6C3CE1" />
+        <ActivityIndicator size="large" color="#E31E24" />
       </View>
     );
   }
@@ -289,7 +298,7 @@ export default function AdminScreen() {
           <Text style={styles.backText}>← Retour</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Dashboard Admin 📊</Text>
-        <Text style={styles.sub}>Trampocity — Gestion clients</Text>
+        <Text style={styles.sub}>TRAMPO CITY — Gestion clients</Text>
         <TouchableOpacity style={styles.scanBtn} onPress={() => router.push('/scanner')} activeOpacity={0.8}>
           <Text style={styles.scanBtnText}>📷 Scanner un QR code</Text>
         </TouchableOpacity>
@@ -308,6 +317,22 @@ export default function AdminScreen() {
           <Text style={styles.statVal}>{moyennePoints.toLocaleString('fr-FR')}</Text>
           <Text style={styles.statLbl}>Moyenne pts</Text>
         </View>
+      </View>
+
+      {/* Sélecteur de type de session */}
+      <View style={styles.typeSessionWrap}>
+        <Text style={styles.typeSessionLabel}>Type de session</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.typeSessionList}>
+          {TYPES_SESSION.map(t => (
+            <TouchableOpacity
+              key={t}
+              style={[styles.typeChip, typeSession === t && styles.typeChipActif]}
+              onPress={() => setTypeSession(t)}
+              activeOpacity={0.8}>
+              <Text style={[styles.typeChipText, typeSession === t && styles.typeChipTextActif]}>{t}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
       <View style={styles.ongletRow}>
@@ -361,7 +386,7 @@ export default function AdminScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f7f7f5' },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  header: { backgroundColor: '#6C3CE1', padding: 24, paddingTop: 60 },
+  header: { backgroundColor: '#E31E24', padding: 24, paddingTop: 60 },
   backBtn: { marginBottom: 8 },
   backText: { color: '#fff', opacity: 0.8, fontSize: 14 },
   title: { color: '#fff', fontSize: 22, fontWeight: '500' },
@@ -376,15 +401,27 @@ const styles = StyleSheet.create({
     flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: 12,
     alignItems: 'center', borderWidth: 0.5, borderColor: '#ddd',
   },
-  statVal: { fontSize: 18, fontWeight: '500', color: '#6C3CE1' },
+  statVal: { fontSize: 18, fontWeight: '500', color: '#E31E24' },
   statLbl: { fontSize: 10, color: '#888', marginTop: 2 },
+  // Type de session
+  typeSessionWrap: { paddingHorizontal: 16, paddingTop: 12 },
+  typeSessionLabel: { fontSize: 10, fontWeight: '600', color: '#888', letterSpacing: 0.5, marginBottom: 6 },
+  typeSessionList: { gap: 8, paddingBottom: 2 },
+  typeChip: {
+    borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6,
+    backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd',
+  },
+  typeChipActif: { backgroundColor: '#E31E24', borderColor: '#E31E24' },
+  typeChipText: { fontSize: 12, color: '#555', fontWeight: '500' },
+  typeChipTextActif: { color: '#fff' },
+  // Onglets
   ongletRow: {
     flexDirection: 'row', marginHorizontal: 16, marginTop: 12,
     backgroundColor: '#fff', borderRadius: 10, borderWidth: 0.5,
     borderColor: '#ddd', overflow: 'hidden',
   },
   onglet: { flex: 1, paddingVertical: 10, alignItems: 'center' },
-  ongletActif: { backgroundColor: '#6C3CE1' },
+  ongletActif: { backgroundColor: '#E31E24' },
   ongletText: { fontSize: 12, fontWeight: '500', color: '#888' },
   ongletTextActif: { color: '#fff' },
   searchWrap: { padding: 16, paddingBottom: 8 },
@@ -403,9 +440,9 @@ const styles = StyleSheet.create({
   clientTop: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
   clientAvatar: {
     width: 44, height: 44, borderRadius: 22,
-    backgroundColor: '#EEEDfe', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#FDEAEA', alignItems: 'center', justifyContent: 'center',
   },
-  avatarText: { fontSize: 15, fontWeight: '500', color: '#6C3CE1' },
+  avatarText: { fontSize: 15, fontWeight: '500', color: '#E31E24' },
   clientInfo: { flex: 1 },
   clientNom: { fontSize: 14, fontWeight: '500', color: '#1a1a1a' },
   clientEmail: { fontSize: 11, color: '#888', marginTop: 2 },
@@ -415,16 +452,16 @@ const styles = StyleSheet.create({
   pointsVal: { fontSize: 20, fontWeight: '500', color: '#1a1a1a' },
   pointsLbl: { fontSize: 10, color: '#888' },
   clientActions: { flexDirection: 'row', gap: 8, marginBottom: 8 },
-  actionBtn: { flex: 1, backgroundColor: '#6C3CE1', borderRadius: 10, padding: 8, alignItems: 'center' },
+  actionBtn: { flex: 1, backgroundColor: '#E31E24', borderRadius: 10, padding: 8, alignItems: 'center' },
   actionBtnText: { color: '#fff', fontSize: 11, fontWeight: '500' },
   actionBtnRed: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#E24B4A' },
   actionBtnRedText: { color: '#E24B4A', fontSize: 11, fontWeight: '500' },
   notifBtn: {
     borderRadius: 10, padding: 8, alignItems: 'center',
-    borderWidth: 1, borderColor: '#6C3CE1', marginTop: 2,
+    borderWidth: 1, borderColor: '#E31E24', marginTop: 2,
   },
-  notifBtnActif: { backgroundColor: '#f5f0ff', borderColor: '#bbb' },
-  notifBtnText: { color: '#6C3CE1', fontSize: 11, fontWeight: '500' },
+  notifBtnActif: { backgroundColor: '#fff5f5', borderColor: '#bbb' },
+  notifBtnText: { color: '#E31E24', fontSize: 11, fontWeight: '500' },
   notifBtnTextActif: { color: '#888' },
   notifForm: { marginTop: 8, gap: 8 },
   notifInput: {
@@ -433,7 +470,7 @@ const styles = StyleSheet.create({
     minHeight: 60,
   },
   notifSendBtn: {
-    backgroundColor: '#6C3CE1', borderRadius: 10, padding: 10, alignItems: 'center',
+    backgroundColor: '#E31E24', borderRadius: 10, padding: 10, alignItems: 'center',
   },
   notifSendBtnDisabled: { opacity: 0.4 },
   notifSendBtnText: { color: '#fff', fontSize: 13, fontWeight: '500' },

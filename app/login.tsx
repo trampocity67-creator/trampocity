@@ -75,8 +75,9 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
-          <Text style={styles.logo}>🏀</Text>
-          <Text style={styles.title}>Trampocity</Text>
+          <Text style={styles.logo}>🎯</Text>
+          <Text style={styles.title}>TRAMPO CITY</Text>
+          <Text style={styles.tagline}>Complexe indoor de Trampoline à Strasbourg</Text>
           <Text style={styles.sub}>{isRegister ? 'Créer un compte' : 'Connexion'}</Text>
         </View>
 
@@ -145,10 +146,11 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f7f7f5' },
   scroll: { flexGrow: 1 },
-  header: { backgroundColor: '#6C3CE1', padding: 40, paddingTop: 80, alignItems: 'center' },
+  header: { backgroundColor: '#E31E24', padding: 40, paddingTop: 80, alignItems: 'center' },
   logo: { fontSize: 48, marginBottom: 8 },
-  title: { color: '#fff', fontSize: 28, fontWeight: '500' },
-  sub: { color: '#fff', fontSize: 14, opacity: 0.8, marginTop: 6 },
+  title: { color: '#fff', fontSize: 28, fontWeight: '700', letterSpacing: 1 },
+  tagline: { color: '#fff', fontSize: 13, opacity: 0.85, marginTop: 6, textAlign: 'center' },
+  sub: { color: '#fff', fontSize: 14, opacity: 0.7, marginTop: 10 },
   form: { padding: 24, gap: 14 },
   input: {
     backgroundColor: '#fff', borderRadius: 12, borderWidth: 0.5,
@@ -159,8 +161,8 @@ const styles = StyleSheet.create({
     borderWidth: 0.5, borderColor: '#F5C6C4',
   },
   erreurText: { color: '#C0392B', fontSize: 13 },
-  btn: { backgroundColor: '#6C3CE1', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 6 },
+  btn: { backgroundColor: '#E31E24', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 6 },
   btnDisabled: { opacity: 0.6 },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '500' },
-  switchText: { color: '#6C3CE1', textAlign: 'center', fontSize: 14, marginTop: 8 },
+  switchText: { color: '#E31E24', textAlign: 'center', fontSize: 14, marginTop: 8 },
 });
