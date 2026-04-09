@@ -17,13 +17,13 @@ export default function RootLayout() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'INITIAL_SESSION') {
         setSession(session ?? null);
-        if (session?.user?.id) loginOneSignal(session.user.id);
+        if (session?.user?.id) void loginOneSignal(session.user.id);
       } else if (event === 'SIGNED_IN') {
         setSession(session);
-        if (session?.user?.id) loginOneSignal(session.user.id);
+        if (session?.user?.id) void loginOneSignal(session.user.id);
       } else if (event === 'SIGNED_OUT') {
         setSession(null);
-        logoutOneSignal();
+        void logoutOneSignal();
       }
       // TOKEN_REFRESHED, USER_UPDATED → ignorés, pas de redirect
     });
