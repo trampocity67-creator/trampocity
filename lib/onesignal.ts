@@ -1,7 +1,8 @@
 import { Platform } from 'react-native';
 
 const ONESIGNAL_APP_ID = '528bb44d-bc6b-46a3-a40a-e3e9ed2c84e6';
-const ONESIGNAL_REST_KEY = process.env.EXPO_PUBLIC_ONESIGNAL_REST_KEY ?? '';
+
+// La clé REST n'est plus nécessaire ici — elle est lue côté serveur par /api/notify
 
 declare global {
   interface Window {
@@ -18,8 +19,7 @@ export function initOneSignal(): Promise<void> {
   if (Platform.OS !== 'web') return Promise.resolve();
   if (initPromise) return initPromise;
   initPromise = _doInit().catch((e) => {
-    // Réinitialise pour permettre une nouvelle tentative
-    initPromise = null;
+    initPromise = null; // permet une nouvelle tentative
     throw e;
   });
   return initPromise;
@@ -28,13 +28,11 @@ export function initOneSignal(): Promise<void> {
 async function _doInit(): Promise<void> {
   console.log('[OneSignal] init démarrage...');
   console.log('[OneSignal] APP_ID:', ONESIGNAL_APP_ID);
-  console.log('[OneSignal] REST_KEY présente:', ONESIGNAL_REST_KEY ? `oui (${ONESIGNAL_REST_KEY.slice(0, 12)}…)` : 'NON ← variable Vercel manquante ?');
 
   window.OneSignalDeferred = window.OneSignalDeferred || [];
 
-  // 1. Chargement du script SDK
+  // 1. Chargement du script SDK (une seule fois)
   await new Promise<void>((resolve, reject) => {
-    // Ne recharge pas si déjà dans le DOM
     if (document.querySelector('script[src*="OneSignalSDK.page.js"]')) {
       console.log('[OneSignal] script déjà présent dans le DOM');
       resolve();
@@ -51,7 +49,7 @@ async function _doInit(): Promise<void> {
   // 2. OneSignal.init() via la file deferred
   await new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => {
-      console.error('[OneSignal] timeout — init() n\'a jamais été appelée (service worker inaccessible ?)');
+      console.error('[OneSignal] timeout — service worker accessible ? Vérifier https://trampocity.vercel.app/OneSignalSDKWorker.js');
       reject(new Error('OneSignal init timeout (10s)'));
     }, 10_000);
 
@@ -80,7 +78,6 @@ export async function loginOneSignal(supabaseUserId: string): Promise<void> {
   console.log('[OneSignal] loginOneSignal() →', supabaseUserId);
   try {
     await initOneSignal();
-    // Après init, window.OneSignal est disponible directement
     if (window.OneSignal?.login) {
       await window.OneSignal.login(supabaseUserId);
       console.log('[OneSignal] login() OK — external_id défini');
@@ -107,8 +104,8 @@ export async function logoutOneSignal(): Promise<void> {
 }
 
 /**
- * Envoie une notification push à un client identifié par son ID Supabase.
- * Utilise l'API REST OneSignal.
+ * Envoie une notification push via l'Edge Function /api/notify (pas de CORS).
+ * La clé REST OneSignal est lue côté serveur uniquement.
  */
 export async function envoyerNotification(
   supabaseUserId: string,
@@ -117,38 +114,20 @@ export async function envoyerNotification(
 ): Promise<void> {
   console.log('[OneSignal] envoyerNotification() → userId:', supabaseUserId, '| titre:', titre);
 
-  if (!ONESIGNAL_REST_KEY) {
-    console.error('[OneSignal] EXPO_PUBLIC_ONESIGNAL_REST_KEY absente — configurer dans Vercel : Settings → Environment Variables');
-    return;
-  }
-
-  const payload = {
-    app_id: ONESIGNAL_APP_ID,
-    include_aliases: { external_id: [supabaseUserId] },
-    target_channel: 'push',
-    headings: { fr: titre, en: titre },
-    contents: { fr: message, en: message },
-  };
-
-  console.log('[OneSignal] payload:', JSON.stringify(payload));
-
   try {
-    const res = await fetch('https://onesignal.com/api/v1/notifications', {
+    const res = await fetch('/api/notify', {
       method: 'POST',
-      headers: {
-        Authorization: `Basic ${ONESIGNAL_REST_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: supabaseUserId, titre, message }),
     });
 
     const body = await res.text();
     if (res.ok) {
       console.log('[OneSignal] notification envoyée ✓', body);
     } else {
-      console.error(`[OneSignal] erreur API ${res.status}:`, body);
+      console.error(`[OneSignal] erreur /api/notify ${res.status}:`, body);
     }
   } catch (e) {
-    console.error('[OneSignal] erreur réseau:', e);
+    console.error('[OneSignal] erreur réseau vers /api/notify:', e);
   }
 }
