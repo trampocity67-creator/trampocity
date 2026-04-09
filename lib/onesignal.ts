@@ -4,7 +4,7 @@ const ONESIGNAL_APP_ID = '528bb44d-bc6b-46a3-a40a-e3e9ed2c84e6';
 
 // ⚠️  Remplacer par votre clé REST OneSignal :
 //     Dashboard OneSignal → Settings → Keys & IDs → REST API Key
-export const ONESIGNAL_REST_KEY = 'os_v2_app_kkf3itn4nndkhjak4pu62lee43wv6gsmkuze6q4eeckm3xg7nbkqzlfior3xxymho3nkvkv3an2zeqnud7f6qoqirrhsilpghfdmlta';
+const ONESIGNAL_REST_KEY = process.env.EXPO_PUBLIC_ONESIGNAL_REST_KEY ?? '';
 
 declare global {
   interface Window {
@@ -69,8 +69,8 @@ export async function envoyerNotification(
   titre: string,
   message: string,
 ): Promise<void> {
-  if (ONESIGNAL_REST_KEY === 'REMPLACER_PAR_VOTRE_CLE_REST_ONESIGNAL') {
-    console.warn('[OneSignal] Clé REST non configurée — notification ignorée');
+  if (!ONESIGNAL_REST_KEY) {
+    console.warn('[OneSignal] EXPO_PUBLIC_ONESIGNAL_REST_KEY non définie — notification ignorée');
     return;
   }
 
