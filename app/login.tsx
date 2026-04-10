@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator, KeyboardAvoidingView, Platform,
@@ -137,6 +138,10 @@ export default function LoginScreen() {
               {isRegister ? 'Déjà un compte ? Se connecter' : "Pas de compte ? S'inscrire"}
             </Text>
           </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => router.push('/installer' as any)} activeOpacity={0.8}>
+            <Text style={styles.installText}>Installer l'app sur mon téléphone 📲</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -165,4 +170,5 @@ const styles = StyleSheet.create({
   btnDisabled: { opacity: 0.6 },
   btnText: { color: '#fff', fontSize: 16, fontWeight: '500' },
   switchText: { color: '#E31E24', textAlign: 'center', fontSize: 14, marginTop: 8 },
+  installText: { color: '#888', textAlign: 'center', fontSize: 13, marginTop: 16 },
 });
