@@ -1,0 +1,22 @@
+{
+  "name": "TRAMPO CITY",
+  "short_name": "TRAMPO CITY",
+  "description": "Complexe indoor de Trampoline à Strasbourg",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#E31E24",
+  "icons": [
+    {
+      "src": "/assets/images/icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/assets/images/icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

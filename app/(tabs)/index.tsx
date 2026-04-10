@@ -18,10 +18,13 @@ const HORAIRES_NORMAL = [
 export default function HomeScreen() {
   const { client, sessions, loading } = useClient();
   const [notifPermission, setNotifPermission] = useState<'default' | 'granted' | 'denied'>('default');
+  const [isPwa, setIsPwa] = useState(false);
 
   useEffect(() => {
     if (Platform.OS !== 'web') return;
     setNotifPermission((window as any).Notification?.permission ?? 'default');
+    // standalone = true quand l'app est installée sur l'écran d'accueil iOS/Android
+    setIsPwa(!!(window.navigator as any).standalone || window.matchMedia('(display-mode: standalone)').matches);
   }, []);
 
   async function activerNotifications() {
@@ -92,9 +95,16 @@ export default function HomeScreen() {
         {Platform.OS === 'web' && (
           notifPermission === 'granted'
             ? <View style={styles.notifActif}><Text style={styles.notifActifText}>Notifications activées ✅</Text></View>
-            : <TouchableOpacity style={styles.notifBtn} onPress={activerNotifications} activeOpacity={0.8}>
-                <Text style={styles.notifBtnText}>Activer les notifications 🔔</Text>
-              </TouchableOpacity>
+            : isPwa
+              ? <TouchableOpacity style={styles.notifBtn} onPress={activerNotifications} activeOpacity={0.8}>
+                  <Text style={styles.notifBtnText}>Activer les notifications 🔔</Text>
+                </TouchableOpacity>
+              : <View style={styles.notifInstall}>
+                  <Text style={styles.notifInstallIcon}>📲</Text>
+                  <Text style={styles.notifInstallText}>
+                    Pour activer les notifications, installez l'app sur votre écran d'accueil depuis Safari
+                  </Text>
+                </View>
         )}
 
         {/* Horaires */}
@@ -209,6 +219,13 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', marginBottom: 16,
   },
   notifActifText: { color: '#2E7D32', fontSize: 14, fontWeight: '500' },
+  notifInstall: {
+    backgroundColor: '#FFF8E1', borderRadius: 12, padding: 14, marginBottom: 16,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderWidth: 0.5, borderColor: '#FFE082',
+  },
+  notifInstallIcon: { fontSize: 22 },
+  notifInstallText: { flex: 1, fontSize: 12, color: '#795548', lineHeight: 18 },
   // Horaires
   hoursCard: {
     backgroundColor: '#fff', borderRadius: 14, borderWidth: 0.5,
