@@ -47,7 +47,7 @@ export default function InstallerScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.logo}>🎯</Text>
+        <Text style={styles.logo}>🤸</Text>
         <Text style={styles.title}>TRAMPO CITY</Text>
         <Text style={styles.sub}>Installer l'app sur votre téléphone</Text>
       </View>

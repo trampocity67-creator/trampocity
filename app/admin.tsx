@@ -133,8 +133,8 @@ export default function AdminScreen() {
 
         await envoyerNotification(
           client.id,
-          'TRAMPO CITY 🎯',
-          `Vous avez gagné ${montant} points ! Solde : ${nouveauxPoints.toLocaleString('fr-FR')} points 🎯`,
+          'TRAMPO CITY 🤸',
+          `Vous avez gagné ${montant} points ! Solde : ${nouveauxPoints.toLocaleString('fr-FR')} points 🤸`,
         );
 
         alerter('✅ Fait !', `${client.nom} a maintenant ${nouveauxPoints.toLocaleString('fr-FR')} pts`);
@@ -163,7 +163,7 @@ export default function AdminScreen() {
   async function envoyerNotifPerso(client: Client) {
     const msg = notifTexte.trim();
     if (!msg) return;
-    await envoyerNotification(client.id, 'TRAMPO CITY 🎯', msg);
+    await envoyerNotification(client.id, 'TRAMPO CITY 🤸', msg);
     alerter('✅ Envoyé', `Notification envoyée à ${client.nom}`);
     setNotifOuverte(null);
     setNotifTexte('');
@@ -173,7 +173,7 @@ export default function AdminScreen() {
     const prenom = client.nom.split(' ')[0];
     await envoyerNotification(
       client.id,
-      'TRAMPO CITY vous manque ! 🎯',
+      'TRAMPO CITY vous manque ! 🤸',
       `Salut ${prenom} ! Ça fait un moment qu'on ne vous a pas vu. Revenez sauter, ${client.points.toLocaleString('fr-FR')} pts vous attendent ! 🎉`,
     );
     alerter('✅ Envoyé', `Notification de relance envoyée à ${client.nom}`);

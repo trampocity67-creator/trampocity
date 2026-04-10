@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
-  ActivityIndicator, KeyboardAvoidingView, Platform,
+  ActivityIndicator, Image, KeyboardAvoidingView, Platform,
   ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { supabase } from '../supabase';
@@ -76,7 +76,7 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
-          <Text style={styles.logo}>🎯</Text>
+          <Image source={require('../public/icon.png')} style={styles.logo} />
           <Text style={styles.title}>TRAMPO CITY</Text>
           <Text style={styles.tagline}>Complexe indoor de Trampoline à Strasbourg</Text>
           <Text style={styles.sub}>{isRegister ? 'Créer un compte' : 'Connexion'}</Text>
@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f7f7f5' },
   scroll: { flexGrow: 1 },
   header: { backgroundColor: '#E31E24', padding: 40, paddingTop: 80, alignItems: 'center' },
-  logo: { fontSize: 48, marginBottom: 8 },
+  logo: { width: 120, height: 120, borderRadius: 24, marginBottom: 8 },
   title: { color: '#fff', fontSize: 28, fontWeight: '700', letterSpacing: 1 },
   tagline: { color: '#fff', fontSize: 13, opacity: 0.85, marginTop: 6, textAlign: 'center' },
   sub: { color: '#fff', fontSize: 14, opacity: 0.7, marginTop: 10 },

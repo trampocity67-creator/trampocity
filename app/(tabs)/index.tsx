@@ -65,7 +65,7 @@ export default function HomeScreen() {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.logo}>🎯 TRAMPO CITY</Text>
+        <Text style={styles.logo}>🤸 TRAMPO CITY</Text>
         <Text style={styles.greeting}>Bonjour, {client?.nom?.split(' ')[0]} ! 👋</Text>
         <View style={styles.pointsCard}>
           <Text style={styles.pointsLabel}>MES POINTS</Text>
@@ -153,7 +153,7 @@ export default function HomeScreen() {
 
         {sessions.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyIcon}>🎯</Text>
+            <Text style={styles.emptyIcon}>🤸</Text>
             <Text style={styles.emptyText}>Pas encore de sessions</Text>
             <Text style={styles.emptyDesc}>
               Venez sauter chez TRAMPO CITY et gagnez vos premiers points !
@@ -163,7 +163,7 @@ export default function HomeScreen() {
           sessions.map((s) => (
             <View key={s.id} style={styles.activityItem}>
               <View style={[styles.activityIcon, { backgroundColor: s.points_gagnes > 0 ? '#FDEAEA' : '#FAECE7' }]}>
-                <Text>{s.points_gagnes > 0 ? '🎯' : '🎁'}</Text>
+                <Text>{s.points_gagnes > 0 ? '🤸' : '🎁'}</Text>
               </View>
               <View style={styles.activityInfo}>
                 <Text style={styles.activityName}>{s.description}</Text>
