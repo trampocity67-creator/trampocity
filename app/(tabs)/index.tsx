@@ -1,4 +1,5 @@
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useClient } from '../../context/ClientContext';
 
 const NIVEAUX = [
@@ -16,6 +17,22 @@ const HORAIRES_NORMAL = [
 
 export default function HomeScreen() {
   const { client, sessions, loading } = useClient();
+  const [notifPermission, setNotifPermission] = useState<'default' | 'granted' | 'denied'>('default');
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    setNotifPermission((window as any).Notification?.permission ?? 'default');
+  }, []);
+
+  async function activerNotifications() {
+    if (Platform.OS !== 'web') return;
+    try {
+      await (window as any).OneSignal?.Notifications?.requestPermission();
+      setNotifPermission((window as any).Notification?.permission ?? 'default');
+    } catch (e) {
+      console.error('[OneSignal] requestPermission erreur:', e);
+    }
+  }
 
   if (loading) {
     return (
@@ -70,6 +87,15 @@ export default function HomeScreen() {
             Présentez votre QR code en caisse !
           </Text>
         </View>
+
+        {/* Notifications */}
+        {Platform.OS === 'web' && (
+          notifPermission === 'granted'
+            ? <View style={styles.notifActif}><Text style={styles.notifActifText}>Notifications activées ✅</Text></View>
+            : <TouchableOpacity style={styles.notifBtn} onPress={activerNotifications} activeOpacity={0.8}>
+                <Text style={styles.notifBtnText}>Activer les notifications 🔔</Text>
+              </TouchableOpacity>
+        )}
 
         {/* Horaires */}
         <View style={styles.hoursCard}>
@@ -173,6 +199,16 @@ const styles = StyleSheet.create({
   },
   infoIcon: { fontSize: 20 },
   infoText: { flex: 1, fontSize: 12, color: '#C0392B', lineHeight: 18 },
+  notifBtn: {
+    backgroundColor: '#E31E24', borderRadius: 12, minHeight: 50,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 16, width: '100%',
+  },
+  notifBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  notifActif: {
+    backgroundColor: '#EAF6EC', borderRadius: 12, minHeight: 50,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+  },
+  notifActifText: { color: '#2E7D32', fontSize: 14, fontWeight: '500' },
   // Horaires
   hoursCard: {
     backgroundColor: '#fff', borderRadius: 14, borderWidth: 0.5,

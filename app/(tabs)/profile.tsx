@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { supabase } from '../../supabase';
@@ -9,24 +9,6 @@ import { initiales } from '../../lib/utils';
 export default function ProfileScreen() {
   const { client, loading } = useClient();
   const [infoExpanded, setInfoExpanded] = useState(false);
-  const [notifPermission, setNotifPermission] = useState<'default' | 'granted' | 'denied'>('default');
-
-  useEffect(() => {
-    if (Platform.OS !== 'web') return;
-    const permission = (window as any).Notification?.permission ?? 'default';
-    setNotifPermission(permission);
-  }, []);
-
-  async function activerNotifications() {
-    if (Platform.OS !== 'web') return;
-    try {
-      await (window as any).OneSignal?.Notifications?.requestPermission();
-      const permission = (window as any).Notification?.permission ?? 'default';
-      setNotifPermission(permission);
-    } catch (e) {
-      console.error('[OneSignal] requestPermission erreur:', e);
-    }
-  }
 
   async function seDeconnecter() {
     const doSignOut = async () => { await supabase.auth.signOut(); };
@@ -122,14 +104,6 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {Platform.OS === 'web' && (
-          notifPermission === 'granted'
-            ? <View style={styles.notifActif}><Text style={styles.notifActifText}>Notifications activées ✅</Text></View>
-            : <TouchableOpacity style={styles.notifBtn} onPress={activerNotifications} activeOpacity={0.8}>
-                <Text style={styles.notifBtnText}>Activer les notifications 🔔</Text>
-              </TouchableOpacity>
-        )}
-
         {client?.is_admin && (
           <TouchableOpacity style={styles.adminBtn} onPress={() => router.push('/admin')} activeOpacity={0.8}>
             <Text style={styles.adminText}>📊 Dashboard Admin</Text>
@@ -214,16 +188,6 @@ const styles = StyleSheet.create({
     alignItems: 'center', marginTop: 8, marginBottom: 8,
   },
   adminText: { color: '#fff', fontSize: 14, fontWeight: '500' },
-  notifBtn: {
-    backgroundColor: '#fff', borderRadius: 12, borderWidth: 1,
-    borderColor: '#E31E24', padding: 14, alignItems: 'center', marginBottom: 8,
-  },
-  notifBtnText: { color: '#E31E24', fontSize: 14, fontWeight: '500' },
-  notifActif: {
-    backgroundColor: '#EAF6EC', borderRadius: 12, padding: 14,
-    alignItems: 'center', marginBottom: 8,
-  },
-  notifActifText: { color: '#2E7D32', fontSize: 14, fontWeight: '500' },
   logoutBtn: {
     backgroundColor: '#fff', borderRadius: 12, borderWidth: 0.5,
     borderColor: '#ddd', padding: 14, alignItems: 'center', marginTop: 8,
