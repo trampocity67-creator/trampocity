@@ -87,7 +87,7 @@ export default function RewardsScreen() {
         });
         setDemandeEnCours(false);
         if (error) {
-          alerter('Erreur', "Impossible d'envoyer la demande. Réessayez.");
+          alerter('Erreur', error.message || "Impossible d'envoyer la demande. Réessayez.");
           return;
         }
         setQrModal(recompense);
