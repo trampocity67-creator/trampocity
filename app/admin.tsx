@@ -427,16 +427,28 @@ export default function AdminScreen() {
   }
 
   async function validerDemande(demande: Demande) {
-    const clientPoints = demande.client_points ?? 0;
-    if (clientPoints < demande.points_depenses) {
-      alerter('Points insuffisants', `${demande.client_nom} n'a que ${clientPoints.toLocaleString('fr-FR')} pts (besoin : ${demande.points_depenses.toLocaleString('fr-FR')} pts).`);
-      return;
-    }
     confirmer(
       'Valider la récompense',
       `Valider "${demande.recompense_nom}" pour ${demande.client_nom} (−${demande.points_depenses.toLocaleString('fr-FR')} pts) ?`,
       async () => {
-        const nouveauxPoints = clientPoints - demande.points_depenses;
+        // Fetch fresh points to avoid stale join data
+        const { data: fresh, error: fetchErr } = await supabase
+          .from('clients')
+          .select('points')
+          .eq('id', demande.client_id)
+          .single();
+
+        if (fetchErr || !fresh) {
+          alerter('Erreur', 'Impossible de récupérer les données du client.');
+          return;
+        }
+
+        if (fresh.points < demande.points_depenses) {
+          alerter('Points insuffisants', `${demande.client_nom} n'a que ${fresh.points.toLocaleString('fr-FR')} pts (besoin : ${demande.points_depenses.toLocaleString('fr-FR')} pts).`);
+          return;
+        }
+
+        const nouveauxPoints = fresh.points - demande.points_depenses;
         const [updateStatut, updatePts] = await Promise.all([
           supabase.from('recompenses_utilisees').update({ statut: 'validee' }).eq('id', demande.id),
           supabase.from('clients').update({ points: nouveauxPoints }).eq('id', demande.client_id),
