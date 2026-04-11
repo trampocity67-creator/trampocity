@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { supabase } from '../supabase';
 import { Client } from '../lib/types';
-import { calculerNiveau, niveauCouleur, initiales } from '../lib/utils';
+import { initiales } from '../lib/utils';
 import { envoyerNotification } from '../lib/onesignal';
 
 function alerter(titre: string, message: string) {
@@ -203,7 +203,6 @@ export default function AdminScreen() {
           }),
           supabase.from('clients').update({
             points: nouveauxPoints,
-            niveau: calculerNiveau(nouveauxPoints),
           }).eq('id', client.id),
         ]);
 
@@ -407,7 +406,6 @@ export default function AdminScreen() {
   }
 
   function renderClientCard(c: Client, index: number, isInactif = false) {
-    const couleur = niveauCouleur(c.niveau);
     const notifOuvte = notifOuverte === c.id;
 
     return (
@@ -419,9 +417,6 @@ export default function AdminScreen() {
           <View style={styles.clientInfo}>
             <Text style={styles.clientNom}>#{index + 1} {c.nom}</Text>
             <Text style={styles.clientEmail}>{c.email}</Text>
-            <View style={[styles.niveauBadge, { backgroundColor: couleur + '22' }]}>
-              <Text style={[styles.niveauText, { color: couleur }]}>{c.niveau}</Text>
-            </View>
           </View>
           <View style={styles.clientPoints}>
             <Text style={styles.pointsVal}>{c.points.toLocaleString('fr-FR')}</Text>

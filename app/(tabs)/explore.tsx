@@ -1,10 +1,11 @@
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator, Alert, Platform, ScrollView, StyleSheet,
   Text, TouchableOpacity, View,
 } from 'react-native';
 import { supabase } from '../../supabase';
 import { useClient } from '../../context/ClientContext';
-import { calculerNiveau } from '../../lib/utils';
+import { prenomInitiale } from '../../lib/utils';
 
 interface Recompense {
   nom: string;
@@ -14,12 +15,20 @@ interface Recompense {
   bg: string;
 }
 
+interface TopClient {
+  id: string;
+  nom: string;
+  points: number;
+}
+
 const RECOMPENSES: Recompense[] = [
   { nom: 'Boisson offerte', desc: 'Au bar de TRAMPO CITY', points: 200, emoji: '🥤', bg: '#EAF3DE' },
   { nom: 'Chaussettes grip', desc: 'Paire de chaussettes premium', points: 400, emoji: '🧦', bg: '#FBEAF0' },
   { nom: 'Entrée 1h offerte', desc: 'Valable en semaine', points: 800, emoji: '🎟️', bg: '#FDEAEA' },
   { nom: 'Accès VIP 2h', desc: 'Zone exclusive + boisson', points: 2000, emoji: '⭐', bg: '#FAEEDA' },
 ];
+
+const MEDAILLES = ['🥇', '🥈', '🥉'];
 
 function alerter(titre: string, message: string) {
   if (Platform.OS === 'web') {
@@ -42,6 +51,20 @@ function confirmer(message: string, onConfirm: () => void) {
 
 export default function RewardsScreen() {
   const { client, loading, refresh } = useClient();
+  const [top5, setTop5] = useState<TopClient[]>([]);
+  const [top5Loading, setTop5Loading] = useState(true);
+
+  useEffect(() => {
+    supabase
+      .from('clients')
+      .select('id, nom, points')
+      .order('points', { ascending: false })
+      .limit(5)
+      .then(({ data }) => {
+        setTop5((data ?? []) as TopClient[]);
+        setTop5Loading(false);
+      });
+  }, []);
 
   async function utiliserRecompense(recompense: Recompense) {
     if (!client) return;
@@ -67,7 +90,6 @@ export default function RewardsScreen() {
           }),
           supabase.from('clients').update({
             points: nouveauxPoints,
-            niveau: calculerNiveau(nouveauxPoints),
           }).eq('id', client.id),
         ]);
 
@@ -98,6 +120,37 @@ export default function RewardsScreen() {
       </View>
 
       <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
+
+        {/* Classement Top 5 */}
+        <View style={styles.classementCard}>
+          <Text style={styles.classementTitle}>Classement 🏆</Text>
+          <Text style={styles.classementSub}>Top 5 des membres les plus actifs</Text>
+
+          {top5Loading ? (
+            <ActivityIndicator color="#E31E24" style={{ marginTop: 12 }} />
+          ) : (
+            top5.map((c, i) => {
+              const isMe = c.id === client?.id;
+              return (
+                <View
+                  key={c.id}
+                  style={[styles.topRow, i === top5.length - 1 && styles.topRowLast, isMe && styles.topRowMe]}>
+                  <Text style={styles.topMedal}>{MEDAILLES[i] ?? `${i + 1}`}</Text>
+                  <Text style={[styles.topNom, isMe && styles.topNomMe]}>
+                    {prenomInitiale(c.nom)}{isMe ? ' (moi)' : ''}
+                  </Text>
+                  <Text style={[styles.topPts, isMe && styles.topPtsMe]}>
+                    {c.points.toLocaleString('fr-FR')} pts
+                  </Text>
+                </View>
+              );
+            })
+          )}
+        </View>
+
+        {/* Récompenses */}
+        <Text style={styles.sectionTitle}>Mes récompenses</Text>
+
         {RECOMPENSES.map((r) => {
           const suffisant = (client?.points ?? 0) >= r.points;
           return (
@@ -137,6 +190,29 @@ const styles = StyleSheet.create({
   sub: { color: '#fff', fontSize: 13, opacity: 0.85, marginTop: 4 },
   body: { flex: 1 },
   bodyContent: { padding: 16, paddingBottom: 24 },
+  // Classement
+  classementCard: {
+    backgroundColor: '#fff', borderRadius: 14, borderWidth: 0.5,
+    borderColor: '#ddd', padding: 14, marginBottom: 20,
+  },
+  classementTitle: { fontSize: 15, fontWeight: '600', color: '#1a1a1a' },
+  classementSub: { fontSize: 11, color: '#888', marginTop: 2, marginBottom: 12 },
+  topRow: {
+    flexDirection: 'row', alignItems: 'center', paddingVertical: 10,
+    borderBottomWidth: 0.5, borderBottomColor: '#f0f0f0', gap: 10,
+  },
+  topRowLast: { borderBottomWidth: 0 },
+  topRowMe: { backgroundColor: '#FFF5F5', marginHorizontal: -14, paddingHorizontal: 14, borderRadius: 8 },
+  topMedal: { fontSize: 20, width: 30, textAlign: 'center' },
+  topNom: { flex: 1, fontSize: 14, color: '#1a1a1a' },
+  topNomMe: { fontWeight: '600', color: '#E31E24' },
+  topPts: { fontSize: 13, fontWeight: '500', color: '#888' },
+  topPtsMe: { color: '#E31E24' },
+  sectionTitle: {
+    fontSize: 12, fontWeight: '500', color: '#888',
+    textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10,
+  },
+  // Récompenses
   rewardCard: {
     backgroundColor: '#fff', borderRadius: 14, borderWidth: 0.5, borderColor: '#ddd',
     marginBottom: 10, flexDirection: 'row', overflow: 'hidden',

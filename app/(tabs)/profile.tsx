@@ -50,7 +50,7 @@ export default function ProfileScreen() {
         </View>
         <View style={styles.headerInfo}>
           <Text style={styles.name}>{client?.nom}</Text>
-          <Text style={styles.since}>Niveau {client?.niveau} ⭐ · {client?.points?.toLocaleString('fr-FR')} pts</Text>
+          <Text style={styles.since}>{client?.points?.toLocaleString('fr-FR')} pts</Text>
         </View>
       </View>
 
@@ -73,10 +73,6 @@ export default function ProfileScreen() {
           <View style={styles.statCard}>
             <Text style={styles.statVal}>{client?.points?.toLocaleString('fr-FR')}</Text>
             <Text style={styles.statLbl}>Points</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statVal}>{client?.niveau}</Text>
-            <Text style={styles.statLbl}>Niveau</Text>
           </View>
         </View>
 

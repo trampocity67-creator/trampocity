@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { supabase } from '../supabase';
 import { Client } from '../lib/types';
-import { calculerNiveau, initiales } from '../lib/utils';
+import { initiales } from '../lib/utils';
 
 // ─── Web scanner : saisie manuelle de l'ID client ────────────────────────────
 
@@ -43,7 +43,6 @@ function ScannerWeb() {
       }),
       supabase.from('clients').update({
         points: nouveauxPoints,
-        niveau: calculerNiveau(nouveauxPoints),
       }).eq('id', client.id),
     ]);
 
@@ -70,10 +69,6 @@ function ScannerWeb() {
             <View style={styles.infoCard}>
               <Text style={styles.infoVal}>{client.points.toLocaleString('fr-FR')}</Text>
               <Text style={styles.infoLbl}>Points</Text>
-            </View>
-            <View style={styles.infoCard}>
-              <Text style={styles.infoVal}>{client.niveau}</Text>
-              <Text style={styles.infoLbl}>Niveau</Text>
             </View>
           </View>
         </View>
@@ -214,7 +209,6 @@ function ScannerMobile() {
       }),
       supabase.from('clients').update({
         points: nouveauxPoints,
-        niveau: calculerNiveau(nouveauxPoints),
       }).eq('id', client.id),
     ]);
 
@@ -276,10 +270,6 @@ function ScannerMobile() {
               <View style={styles.infoCard}>
                 <Text style={styles.infoVal}>{client.points.toLocaleString('fr-FR')}</Text>
                 <Text style={styles.infoLbl}>Points</Text>
-              </View>
-              <View style={styles.infoCard}>
-                <Text style={styles.infoVal}>{client.niveau}</Text>
-                <Text style={styles.infoLbl}>Niveau</Text>
               </View>
             </View>
           </View>

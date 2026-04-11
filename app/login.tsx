@@ -57,7 +57,6 @@ export default function LoginScreen() {
       nom: nom.trim(),
       email: email.trim(),
       points: 0,
-      niveau: 'Bronze',
     });
     setLoading(false);
   }

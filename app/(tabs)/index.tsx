@@ -1,13 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { supabase } from '../../supabase';
 import { useClient } from '../../context/ClientContext';
-
-const NIVEAUX = [
-  { emoji: '🥉', nom: 'Bronze', pts: '0 pts' },
-  { emoji: '🥈', nom: 'Argent', pts: '500 pts' },
-  { emoji: '🥇', nom: 'Or', pts: '1 000 pts' },
-  { emoji: '💎', nom: 'Platine', pts: '2 000 pts' },
-];
 
 const HORAIRES_NORMAL = [
   { jours: 'Mer · Sam · Dim', heure: '10h – 21h', ferme: false },
@@ -19,13 +13,25 @@ export default function HomeScreen() {
   const { client, sessions, loading } = useClient();
   const [notifPermission, setNotifPermission] = useState<'default' | 'granted' | 'denied'>('default');
   const [isPwa, setIsPwa] = useState(false);
+  const [classement, setClassement] = useState<{ rang: number; total: number } | null>(null);
 
   useEffect(() => {
     if (Platform.OS !== 'web') return;
     setNotifPermission((window as any).Notification?.permission ?? 'default');
-    // standalone = true quand l'app est installée sur l'écran d'accueil iOS/Android
     setIsPwa(!!(window.navigator as any).standalone || window.matchMedia('(display-mode: standalone)').matches);
   }, []);
+
+  useEffect(() => {
+    if (!client?.id) return;
+    Promise.all([
+      supabase.from('clients').select('id', { count: 'exact', head: true }).gt('points', client.points),
+      supabase.from('clients').select('id', { count: 'exact', head: true }),
+    ]).then(([devant, tous]) => {
+      const rang = (devant.count ?? 0) + 1;
+      const total = tous.count ?? 0;
+      setClassement({ rang, total });
+    });
+  }, [client?.id, client?.points]);
 
   async function activerNotifications() {
     if (Platform.OS !== 'web') return;
@@ -46,22 +52,6 @@ export default function HomeScreen() {
     );
   }
 
-  const pts = client?.points ?? 0;
-  const niveauxSeuils = [
-    { nom: 'Argent', seuil: 500 },
-    { nom: 'Or', seuil: 1000 },
-    { nom: 'Platine', seuil: 2000 },
-  ];
-  const prochain = niveauxSeuils.find(n => pts < n.seuil);
-  const seuilPrecedent = prochain
-    ? (niveauxSeuils[niveauxSeuils.indexOf(prochain) - 1]?.seuil ?? 0)
-    : 2000;
-  const seuilProchain = prochain?.seuil ?? 2000;
-  const pourcent = prochain
-    ? Math.min(((pts - seuilPrecedent) / (seuilProchain - seuilPrecedent)) * 100, 100)
-    : 100;
-  const pointsManquants = prochain ? seuilProchain - pts : 0;
-
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
@@ -70,14 +60,14 @@ export default function HomeScreen() {
         <View style={styles.pointsCard}>
           <Text style={styles.pointsLabel}>MES POINTS</Text>
           <Text style={styles.pointsValue}>{client?.points?.toLocaleString('fr-FR')}</Text>
-          <Text style={styles.pointsSub}>Niveau {client?.niveau} ⭐</Text>
-          <View style={styles.barBg}>
-            <View style={[styles.barFill, { width: `${pourcent}%` as any }]} />
-          </View>
-          {prochain ? (
-            <Text style={styles.pointsNext}>{pointsManquants} pts jusqu'au niveau {prochain.nom}</Text>
+
+          {classement ? (
+            <View style={styles.classementRow}>
+              <Text style={styles.classementRang}>#{classement.rang}</Text>
+              <Text style={styles.classementSur}> sur {classement.total} membres</Text>
+            </View>
           ) : (
-            <Text style={styles.pointsNext}>🏆 Niveau maximum atteint !</Text>
+            <Text style={styles.classementPlaceholder}>Calcul du classement…</Text>
           )}
         </View>
       </View>
@@ -136,19 +126,6 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <View style={styles.niveauxCard}>
-          <Text style={styles.niveauxTitle}>Les niveaux</Text>
-          {NIVEAUX.map((n, i) => (
-            <View
-              key={n.nom}
-              style={[styles.niveauRow, i === NIVEAUX.length - 1 && styles.niveauRowLast]}>
-              <Text style={styles.niveauEmoji}>{n.emoji}</Text>
-              <Text style={styles.niveauNom}>{n.nom}</Text>
-              <Text style={styles.niveauPts}>{n.pts}</Text>
-            </View>
-          ))}
-        </View>
-
         <Text style={styles.sectionTitle}>Activité récente</Text>
 
         {sessions.length === 0 ? (
@@ -196,11 +173,11 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
   },
   pointsLabel: { color: '#fff', fontSize: 11, opacity: 0.8, letterSpacing: 0.5 },
-  pointsValue: { color: '#fff', fontSize: 42, fontWeight: '500', marginVertical: 4 },
-  pointsSub: { color: '#fff', fontSize: 13, opacity: 0.85 },
-  barBg: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 4, height: 6, marginTop: 12 },
-  barFill: { backgroundColor: '#fff', borderRadius: 4, height: 6 },
-  pointsNext: { color: '#fff', fontSize: 11, opacity: 0.75, marginTop: 5 },
+  pointsValue: { color: '#fff', fontSize: 42, fontWeight: '500', marginVertical: 6 },
+  classementRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: 4 },
+  classementRang: { color: '#fff', fontSize: 22, fontWeight: '700' },
+  classementSur: { color: '#fff', fontSize: 13, opacity: 0.8 },
+  classementPlaceholder: { color: '#fff', fontSize: 13, opacity: 0.6, marginTop: 4 },
   body: { padding: 16 },
   infoCard: {
     backgroundColor: '#FDEAEA', borderRadius: 12, padding: 14,
@@ -226,7 +203,6 @@ const styles = StyleSheet.create({
   },
   notifInstallIcon: { fontSize: 22 },
   notifInstallText: { flex: 1, fontSize: 12, color: '#795548', lineHeight: 18 },
-  // Horaires
   hoursCard: {
     backgroundColor: '#fff', borderRadius: 14, borderWidth: 0.5,
     borderColor: '#ddd', padding: 14, marginBottom: 16,
@@ -247,20 +223,6 @@ const styles = StyleSheet.create({
     alignItems: 'center', marginTop: 10,
   },
   hoursBadgeText: { fontSize: 11, color: '#E31E24', fontWeight: '600' },
-  // Niveaux
-  niveauxCard: {
-    backgroundColor: '#fff', borderRadius: 14, borderWidth: 0.5,
-    borderColor: '#ddd', padding: 14, marginBottom: 20,
-  },
-  niveauxTitle: { fontSize: 13, fontWeight: '500', color: '#1a1a1a', marginBottom: 12 },
-  niveauRow: {
-    flexDirection: 'row', alignItems: 'center', paddingVertical: 6,
-    borderBottomWidth: 0.5, borderBottomColor: '#f0f0f0',
-  },
-  niveauRowLast: { borderBottomWidth: 0 },
-  niveauEmoji: { fontSize: 18, width: 30 },
-  niveauNom: { flex: 1, fontSize: 13, color: '#1a1a1a' },
-  niveauPts: { fontSize: 12, color: '#E31E24', fontWeight: '500' },
   sectionTitle: {
     fontSize: 12, fontWeight: '500', color: '#888',
     textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10,
