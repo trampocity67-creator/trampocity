@@ -3,7 +3,6 @@ import {
   ActivityIndicator, Alert, Modal, Platform, ScrollView, StyleSheet,
   Text, TouchableOpacity, View,
 } from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
 import { supabase } from '../../supabase';
 import { useClient } from '../../context/ClientContext';
 import { prenomInitiale } from '../../lib/utils';
@@ -50,12 +49,21 @@ function confirmer(message: string, onConfirm: () => void) {
   }
 }
 
+interface HistoriqueItem {
+  id: string;
+  recompense_nom: string;
+  points_depenses: number;
+  created_at: string;
+  statut: string;
+}
+
 export default function RewardsScreen() {
   const { client, loading } = useClient();
   const [top5, setTop5] = useState<TopClient[]>([]);
   const [top5Loading, setTop5Loading] = useState(true);
-  const [qrModal, setQrModal] = useState<Recompense | null>(null);
+  const [confirmModal, setConfirmModal] = useState(false);
   const [demandeEnCours, setDemandeEnCours] = useState(false);
+  const [historique, setHistorique] = useState<HistoriqueItem[]>([]);
 
   useEffect(() => {
     supabase
@@ -68,6 +76,16 @@ export default function RewardsScreen() {
         setTop5Loading(false);
       });
   }, []);
+
+  useEffect(() => {
+    if (!client?.id) return;
+    supabase
+      .from('recompenses_utilisees')
+      .select('id, recompense_nom, points_depenses, created_at, statut')
+      .eq('client_id', client.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => setHistorique((data ?? []) as HistoriqueItem[]));
+  }, [client?.id]);
 
   async function demanderRecompense(recompense: Recompense) {
     if (!client) return;
@@ -90,7 +108,14 @@ export default function RewardsScreen() {
           alerter('Erreur', error.message || "Impossible d'envoyer la demande. Réessayez.");
           return;
         }
-        setQrModal(recompense);
+        // Rafraîchir l'historique
+        supabase
+          .from('recompenses_utilisees')
+          .select('id, recompense_nom, points_depenses, created_at, statut')
+          .eq('client_id', client.id)
+          .order('created_at', { ascending: false })
+          .then(({ data }) => setHistorique((data ?? []) as HistoriqueItem[]));
+        setConfirmModal(true);
       }
     );
   }
@@ -168,37 +193,52 @@ export default function RewardsScreen() {
             </View>
           );
         })}
+
+        {/* Historique des récompenses */}
+        <Text style={[styles.sectionTitle, { marginTop: 10 }]}>Mes demandes</Text>
+
+        {historique.length === 0 ? (
+          <View style={styles.histoEmpty}>
+            <Text style={styles.histoEmptyText}>Aucune demande pour l'instant</Text>
+          </View>
+        ) : (
+          historique.map((h) => {
+            const statutInfo =
+              h.statut === 'validee'   ? { label: '✅ Validée',    color: '#2E7D32', bg: '#EAF6EC' } :
+              h.statut === 'refusee'   ? { label: '❌ Refusée',    color: '#C62828', bg: '#FDEAEA' } :
+                                         { label: '⏳ En attente', color: '#795548', bg: '#FFF8E1' };
+            return (
+              <View key={h.id} style={styles.histoItem}>
+                <View style={styles.histoInfo}>
+                  <Text style={styles.histoNom}>{h.recompense_nom}</Text>
+                  <Text style={styles.histoDate}>
+                    {new Date(h.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                  </Text>
+                </View>
+                <View style={[styles.histoStatut, { backgroundColor: statutInfo.bg }]}>
+                  <Text style={[styles.histoStatutText, { color: statutInfo.color }]}>{statutInfo.label}</Text>
+                </View>
+              </View>
+            );
+          })
+        )}
       </ScrollView>
 
-      {/* Modal QR code récompense */}
+      {/* Modal confirmation demande */}
       <Modal
-        visible={qrModal !== null}
+        visible={confirmModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setQrModal(null)}>
-        <View style={styles.qrOverlay}>
-          <View style={styles.qrCard}>
-            <Text style={styles.qrEmoji}>{qrModal?.emoji}</Text>
-            <Text style={styles.qrTitle}>{qrModal?.nom}</Text>
-            <Text style={styles.qrDesc}>
-              Montrez ce QR code à l'équipe Trampo City pour valider votre récompense
+        onRequestClose={() => setConfirmModal(false)}>
+        <View style={styles.confirmOverlay}>
+          <View style={styles.confirmCard}>
+            <Text style={styles.confirmEmoji}>⏳</Text>
+            <Text style={styles.confirmTitle}>Votre demande est en attente</Text>
+            <Text style={styles.confirmDesc}>
+              L'équipe Trampo City va valider votre récompense. Vous serez notifié dès la validation.
             </Text>
-            <View style={styles.qrWrap}>
-              <QRCode
-                value={client?.id ?? 'trampo-city'}
-                size={200}
-                color="#0D0D0D"
-                backgroundColor="white"
-              />
-            </View>
-            <Text style={styles.qrIdText}>ID : {client?.id?.substring(0, 8).toUpperCase()}</Text>
-            <View style={styles.qrInfoBadge}>
-              <Text style={styles.qrInfoText}>
-                ⏳ Votre demande est en attente de validation par l'équipe
-              </Text>
-            </View>
-            <TouchableOpacity style={styles.qrFermerBtn} onPress={() => setQrModal(null)} activeOpacity={0.8}>
-              <Text style={styles.qrFermerText}>Fermer</Text>
+            <TouchableOpacity style={styles.confirmBtn} onPress={() => setConfirmModal(false)} activeOpacity={0.8}>
+              <Text style={styles.confirmBtnText}>OK</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -253,25 +293,37 @@ const styles = StyleSheet.create({
   btnText: { fontSize: 11, color: '#E31E24', fontWeight: '500' },
   btnLocked: { borderColor: '#ddd' },
   btnLockedText: { color: '#888' },
-  // Modal QR récompense
-  qrOverlay: {
+  // Historique
+  histoEmpty: {
+    backgroundColor: '#fff', borderRadius: 12, borderWidth: 0.5,
+    borderColor: '#ddd', padding: 16, alignItems: 'center', marginBottom: 8,
+  },
+  histoEmptyText: { color: '#888', fontSize: 13 },
+  histoItem: {
+    backgroundColor: '#fff', borderRadius: 12, borderWidth: 0.5,
+    borderColor: '#ddd', padding: 12, marginBottom: 8,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+  },
+  histoInfo: { flex: 1 },
+  histoNom: { fontSize: 13, fontWeight: '500', color: '#1a1a1a' },
+  histoDate: { fontSize: 11, color: '#888', marginTop: 2 },
+  histoStatut: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+  histoStatutText: { fontSize: 11, fontWeight: '600' },
+  // Modal confirmation
+  confirmOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center', alignItems: 'center', padding: 24,
   },
-  qrCard: {
-    backgroundColor: '#fff', borderRadius: 20, padding: 24,
-    width: '100%', maxWidth: 400, alignItems: 'center', gap: 10,
+  confirmCard: {
+    backgroundColor: '#fff', borderRadius: 20, padding: 28,
+    width: '100%', maxWidth: 360, alignItems: 'center', gap: 12,
   },
-  qrEmoji: { fontSize: 40 },
-  qrTitle: { fontSize: 18, fontWeight: '600', color: '#1a1a1a', textAlign: 'center' },
-  qrDesc: { fontSize: 13, color: '#666', textAlign: 'center', lineHeight: 19 },
-  qrWrap: { padding: 16, backgroundColor: '#fff', borderRadius: 12, borderWidth: 0.5, borderColor: '#eee', marginVertical: 4 },
-  qrIdText: { fontSize: 11, color: '#aaa', fontFamily: 'monospace' },
-  qrInfoBadge: { backgroundColor: '#FFF8E1', borderRadius: 10, padding: 12, borderWidth: 0.5, borderColor: '#FFE082', width: '100%' },
-  qrInfoText: { fontSize: 12, color: '#795548', textAlign: 'center', lineHeight: 18 },
-  qrFermerBtn: {
-    backgroundColor: '#f0f0f0', borderRadius: 12, paddingVertical: 12,
-    paddingHorizontal: 32, marginTop: 4,
+  confirmEmoji: { fontSize: 44 },
+  confirmTitle: { fontSize: 17, fontWeight: '600', color: '#1a1a1a', textAlign: 'center' },
+  confirmDesc: { fontSize: 13, color: '#666', textAlign: 'center', lineHeight: 19 },
+  confirmBtn: {
+    backgroundColor: '#E31E24', borderRadius: 12, paddingVertical: 12,
+    paddingHorizontal: 40, marginTop: 4,
   },
-  qrFermerText: { color: '#555', fontSize: 14, fontWeight: '500' },
+  confirmBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
 });
