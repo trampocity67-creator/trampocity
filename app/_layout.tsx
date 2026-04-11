@@ -6,49 +6,57 @@ import { supabase } from '../supabase';
 import { initOneSignal, loginOneSignal, logoutOneSignal } from '../lib/onesignal';
 
 export default function RootLayout() {
-  // undefined = en cours de chargement | null = pas de session | Session = connecté
+  // undefined = chargement | null = déconnecté | Session = connecté
   const [session, setSession] = useState<Session | null | undefined>(undefined);
+  // true quand Supabase a détecté un token de récupération de mot de passe
+  const [isRecovery, setIsRecovery] = useState(false);
 
   useEffect(() => {
     initOneSignal();
   }, []);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
       if (event === 'PASSWORD_RECOVERY') {
-        router.replace('/reset-password' as any);
+        // Ne pas rediriger ici : la Stack n'est peut-être pas encore montée.
+        // On lève le flag + on expose la session pour sortir du spinner.
+        setIsRecovery(true);
+        setSession(s ?? null);
         return;
       }
       if (event === 'INITIAL_SESSION') {
-        setSession(session ?? null);
-        if (session?.user?.id) void loginOneSignal(session.user.id);
+        setSession(s ?? null);
+        if (s?.user?.id) void loginOneSignal(s.user.id);
       } else if (event === 'SIGNED_IN') {
-        setSession(session);
-        if (session?.user?.id) void loginOneSignal(session.user.id);
+        setSession(s);
+        if (s?.user?.id) void loginOneSignal(s.user.id);
       } else if (event === 'SIGNED_OUT') {
+        setIsRecovery(false);
         setSession(null);
         void logoutOneSignal();
       }
-      // TOKEN_REFRESHED, USER_UPDATED → ignorés, pas de redirect
+      // TOKEN_REFRESHED, USER_UPDATED → ignorés
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  // Redirect dans un useEffect séparé : s'exécute APRÈS que la Stack soit montée
+  // Redirect s'exécute APRÈS que la Stack soit montée (session !== undefined)
   useEffect(() => {
-    if (session === undefined) return; // chargement en cours, Stack pas encore rendue
-    if (session) {
+    if (session === undefined) return;
+    if (isRecovery) {
+      router.replace('/reset-password' as any);
+    } else if (session) {
       router.replace('/');
     } else {
       router.replace('/login');
     }
-  }, [session]);
+  }, [session, isRecovery]);
 
   if (session === undefined) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
-        <ActivityIndicator size="large" color="#6C3CE1" />
+        <ActivityIndicator size="large" color="#E31E24" />
       </View>
     );
   }
