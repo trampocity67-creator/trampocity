@@ -84,6 +84,10 @@ export default function AdminScreen() {
     );
   }, [recherche, clients]);
 
+  useEffect(() => {
+    if (onglet === 'recompenses') chargerDemandes();
+  }, [onglet]);
+
   async function verifierAdmin() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { router.replace('/'); return; }
@@ -564,10 +568,6 @@ export default function AdminScreen() {
       </View>
     );
   }
-
-  useEffect(() => {
-    if (onglet === 'recompenses') chargerDemandes();
-  }, [onglet]);
 
   const listeAffichee = onglet === 'tous' ? clientsFiltres : clientsInactifs;
 
