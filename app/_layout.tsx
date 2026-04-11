@@ -15,6 +15,10 @@ export default function RootLayout() {
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        router.replace('/reset-password' as any);
+        return;
+      }
       if (event === 'INITIAL_SESSION') {
         setSession(session ?? null);
         if (session?.user?.id) void loginOneSignal(session.user.id);
@@ -55,6 +59,7 @@ export default function RootLayout() {
       <Stack.Screen name="admin" />
       <Stack.Screen name="scanner" />
       <Stack.Screen name="login" />
+      <Stack.Screen name="reset-password" />
     </Stack>
   );
 }

@@ -1,6 +1,6 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import {
   ActivityIndicator, Alert, Platform, StyleSheet, Text,
   TextInput, TouchableOpacity, View,
@@ -9,84 +9,26 @@ import { supabase } from '../supabase';
 import { Client } from '../lib/types';
 import { calculerNiveau, initiales } from '../lib/utils';
 
-// ─── Web scanner : BarcodeDetector + fallback saisie manuelle ────────────────
+// ─── Web scanner : saisie manuelle de l'ID client ────────────────────────────
 
 function ScannerWeb() {
   const [idInput, setIdInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [client, setClient] = useState<Client | null>(null);
-  const [scanMode, setScanMode] = useState<'idle' | 'scanning' | 'unsupported'>('idle');
-  const [scanError, setScanError] = useState<string | null>(null);
-  const videoRef = useRef<any>(null);
-  const streamRef = useRef<any>(null);
-  const animRef = useRef<number | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
 
-  function arreterScanner() {
-    if (animRef.current) { cancelAnimationFrame(animRef.current); animRef.current = null; }
-    if (streamRef.current) { streamRef.current.getTracks().forEach((t: MediaStreamTrack) => t.stop()); streamRef.current = null; }
-  }
-
-  async function demarrerScanner() {
-    setScanError(null);
-    if (typeof window === 'undefined' || !('BarcodeDetector' in window)) {
-      setScanMode('unsupported');
-      return;
-    }
-    setScanMode('scanning');
-  }
-
-  useEffect(() => {
-    if (scanMode !== 'scanning') return;
-    let stopped = false;
-
-    async function start() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        if (stopped) { stream.getTracks().forEach((t: MediaStreamTrack) => t.stop()); return; }
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play();
-        }
-        const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
-        const scan = async () => {
-          if (stopped || !videoRef.current) return;
-          try {
-            const codes = await detector.detect(videoRef.current);
-            if (codes.length > 0) {
-              arreterScanner();
-              setScanMode('idle');
-              await rechercherClientById(codes[0].rawValue);
-              return;
-            }
-          } catch {}
-          animRef.current = requestAnimationFrame(scan);
-        };
-        animRef.current = requestAnimationFrame(scan);
-      } catch {
-        setScanError("Impossible d'accéder à la caméra.");
-        setScanMode('unsupported');
-      }
-    }
-
-    start();
-    return () => { stopped = true; arreterScanner(); };
-  }, [scanMode]);
-
-  async function rechercherClientById(id: string) {
-    if (!id.trim()) return;
+  async function rechercherClient() {
+    const id = idInput.trim();
+    if (!id) return;
+    setErreur(null);
     setLoading(true);
-    const { data, error } = await supabase.from('clients').select('*').eq('id', id.trim()).single();
+    const { data, error } = await supabase.from('clients').select('*').eq('id', id).single();
     setLoading(false);
     if (error || !data) {
-      window.alert('QR code non reconnu\nCe code ne correspond à aucun client TRAMPO CITY.');
+      setErreur('Aucun client trouvé avec cet identifiant. Vérifiez l\'ID affiché sous le QR code.');
       return;
     }
     setClient(data as Client);
-  }
-
-  async function rechercherClient() {
-    await rechercherClientById(idInput);
   }
 
   async function valider(montant: number) {
@@ -106,9 +48,9 @@ function ScannerWeb() {
     ]);
 
     if (sessionRes.error || updateRes.error) {
-      window.alert("Erreur\nLa session n'a pas pu être enregistrée. Réessayez.");
+      window.alert("Erreur — La session n'a pas pu être enregistrée. Réessayez.");
     } else {
-      window.alert(`✅ Session validée !\n${client.nom} a reçu +${montant} pts (${nouveauxPoints.toLocaleString('fr-FR')} pts au total)`);
+      window.alert(`✅ Session validée !\n${client.nom} a reçu +${montant} pts\nTotal : ${nouveauxPoints.toLocaleString('fr-FR')} pts`);
     }
 
     setClient(null);
@@ -151,76 +93,48 @@ function ScannerWeb() {
     );
   }
 
-  // Camera scanning view
-  if (scanMode === 'scanning') {
-    return (
-      <View style={styles.webContainer}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => { arreterScanner(); setScanMode('idle'); }}>
-          <Text style={styles.backText}>← Retour</Text>
-        </TouchableOpacity>
-        <View style={styles.webScannerWrap}>
-          {/* @ts-ignore — video element, web only */}
-          <video
-            ref={videoRef}
-            style={{ width: '100%', maxWidth: 400, borderRadius: 16, display: 'block' } as any}
-            playsInline
-            muted
-          />
-          {loading && <ActivityIndicator size="large" color="#E31E24" style={{ marginTop: 16 }} />}
-          <Text style={styles.scanText}>Pointez la caméra vers le QR code du client</Text>
-        </View>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.webContainer}>
       <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
         <Text style={styles.backText}>← Retour</Text>
       </TouchableOpacity>
+
+      <View style={styles.webHeader}>
+        <Text style={styles.webHeaderIcon}>📋</Text>
+        <Text style={styles.webHeaderTitle}>Valider une session</Text>
+        <Text style={styles.webHeaderSub}>Saisissez l'identifiant client affiché sous le QR code dans l'application</Text>
+      </View>
+
       <View style={styles.webCard}>
-        <Text style={styles.webIcon}>📷</Text>
-        <Text style={styles.webTitle}>Scanner un client</Text>
+        <Text style={styles.webStepLabel}>1. Client ouvre son profil dans l'app</Text>
+        <Text style={styles.webStepDesc}>L'ID est affiché en bas du QR code : <Text style={styles.webStepMono}>ID : XXXXXXXX</Text></Text>
 
-        {scanError && (
-          <View style={styles.webErrorBox}>
-            <Text style={styles.webErrorText}>{scanError}</Text>
-          </View>
-        )}
-
-        {scanMode !== 'unsupported' && (
-          <TouchableOpacity style={styles.btn} onPress={demarrerScanner} activeOpacity={0.8}>
-            <Text style={styles.btnText}>📷 Scanner le QR code</Text>
-          </TouchableOpacity>
-        )}
-
-        <View style={styles.webDivider}>
-          <View style={styles.webDividerLine} />
-          <Text style={styles.webDividerText}>ou saisie manuelle</Text>
-          <View style={styles.webDividerLine} />
-        </View>
-
-        <Text style={styles.webDesc}>
-          Entrez l'ID client affiché sous le QR code.
-        </Text>
+        <Text style={[styles.webStepLabel, { marginTop: 16 }]}>2. Entrez l'ID complet (UUID)</Text>
         <TextInput
           style={styles.webInput}
-          placeholder="ID client (UUID)"
+          placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
           value={idInput}
-          onChangeText={setIdInput}
-          placeholderTextColor="#888"
+          onChangeText={(v) => { setIdInput(v); setErreur(null); }}
+          placeholderTextColor="#bbb"
           autoCapitalize="none"
           autoCorrect={false}
           onSubmitEditing={rechercherClient}
         />
+
+        {erreur && (
+          <View style={styles.webErrorBox}>
+            <Text style={styles.webErrorText}>⚠️  {erreur}</Text>
+          </View>
+        )}
+
         <TouchableOpacity
-          style={[styles.btn, !idInput.trim() && styles.btnDisabled]}
+          style={[styles.btn, (!idInput.trim() || loading) && styles.btnDisabled]}
           onPress={rechercherClient}
-          disabled={loading || !idInput.trim()}
+          disabled={!idInput.trim() || loading}
           activeOpacity={0.8}>
           {loading
             ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.btnText}>Rechercher le client</Text>
+            : <Text style={styles.btnText}>Rechercher le client →</Text>
           }
         </TouchableOpacity>
       </View>
@@ -450,10 +364,13 @@ const styles = StyleSheet.create({
     width: '100%', backgroundColor: '#f7f7f5', borderRadius: 12, borderWidth: 0.5,
     borderColor: '#ddd', padding: 14, fontSize: 14, color: '#1a1a1a',
   },
-  webScannerWrap: { alignItems: 'center', marginTop: 16 },
   webErrorBox: { backgroundColor: '#fff5f5', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#fcc', width: '100%' },
   webErrorText: { color: '#c0392b', fontSize: 13 },
-  webDivider: { flexDirection: 'row', alignItems: 'center', gap: 8, width: '100%' },
-  webDividerLine: { flex: 1, height: 0.5, backgroundColor: '#ddd' },
-  webDividerText: { fontSize: 12, color: '#aaa' },
+  webHeader: { alignItems: 'center', paddingVertical: 24, paddingHorizontal: 24 },
+  webHeaderIcon: { fontSize: 40, marginBottom: 8 },
+  webHeaderTitle: { fontSize: 20, fontWeight: '600', color: '#1a1a1a' },
+  webHeaderSub: { fontSize: 13, color: '#888', textAlign: 'center', marginTop: 6, lineHeight: 18 },
+  webStepLabel: { fontSize: 12, fontWeight: '600', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
+  webStepDesc: { fontSize: 13, color: '#444', marginBottom: 8 },
+  webStepMono: { fontFamily: 'monospace', color: '#1a1a1a', fontWeight: '600' },
 });
