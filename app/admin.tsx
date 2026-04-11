@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, Alert, Platform, ScrollView, StyleSheet,
   Text, TextInput, TouchableOpacity, View,
@@ -50,6 +50,10 @@ export default function AdminScreen() {
   const [scanClient, setScanClient] = useState<Client | null>(null);
   const [scanLoading, setScanLoading] = useState(false);
   const [scanErreur, setScanErreur] = useState<string | null>(null);
+  const [scanMode, setScanMode] = useState<'saisie' | 'camera'>('saisie');
+  const videoRef = useRef<any>(null);
+  const streamRef = useRef<any>(null);
+  const animRef = useRef<number | null>(null);
 
   useEffect(() => {
     verifierAdmin();
@@ -244,19 +248,95 @@ export default function AdminScreen() {
     setNotifTexte('');
   }
 
-  async function rechercherClientScan() {
-    const id = scanId.trim();
-    if (!id) return;
+  function arreterCamera() {
+    if (animRef.current) { cancelAnimationFrame(animRef.current); animRef.current = null; }
+    if (streamRef.current) { streamRef.current.getTracks().forEach((t: MediaStreamTrack) => t.stop()); streamRef.current = null; }
+  }
+
+  function fermerScanModal() {
+    arreterCamera();
+    setScanModal(false);
+    setScanClient(null);
+    setScanId('');
+    setScanErreur(null);
+    setScanMode('saisie');
+  }
+
+  async function rechercherClientParId(id: string) {
+    const trimmed = id.trim();
+    if (!trimmed) return;
     setScanErreur(null);
     setScanLoading(true);
-    const { data, error } = await supabase.from('clients').select('*').eq('id', id).single();
+    const { data, error } = await supabase.from('clients').select('*').eq('id', trimmed).single();
     setScanLoading(false);
     if (error || !data) {
-      setScanErreur('Aucun client trouvé. Vérifiez l\'ID affiché sous le QR code.');
+      setScanErreur("Aucun client trouvé. Vérifiez l'ID affiché sous le QR code.");
       return;
     }
     setScanClient(data as Client);
   }
+
+  async function rechercherClientScan() {
+    await rechercherClientParId(scanId);
+  }
+
+  useEffect(() => {
+    if (!scanModal || scanMode !== 'camera') {
+      arreterCamera();
+      return;
+    }
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || !('BarcodeDetector' in window)) return;
+
+    let stopped = false;
+
+    async function demarrerCamera() {
+      // Attendre que l'élément <video> soit monté dans le DOM
+      let attempts = 0;
+      while (!videoRef.current && attempts < 20) {
+        await new Promise(r => setTimeout(r, 50));
+        attempts++;
+      }
+      if (stopped || !videoRef.current) return;
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        if (stopped) { stream.getTracks().forEach((t: MediaStreamTrack) => t.stop()); return; }
+        streamRef.current = stream;
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+
+        const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
+        const scan = async () => {
+          if (stopped || !videoRef.current) return;
+          try {
+            const codes = await detector.detect(videoRef.current);
+            if (codes.length > 0) {
+              arreterCamera();
+              setScanMode('saisie');
+              setScanLoading(true);
+              const { data, error } = await supabase
+                .from('clients').select('*').eq('id', codes[0].rawValue).single();
+              setScanLoading(false);
+              if (error || !data) {
+                setScanErreur("QR code non reconnu. Vérifiez que le client a bien l'app Trampo City.");
+              } else {
+                setScanClient(data as Client);
+              }
+              return;
+            }
+          } catch {}
+          animRef.current = requestAnimationFrame(scan);
+        };
+        animRef.current = requestAnimationFrame(scan);
+      } catch {
+        setScanErreur("Impossible d'accéder à la caméra. Vérifiez les permissions.");
+        setScanMode('saisie');
+      }
+    }
+
+    demarrerCamera();
+    return () => { stopped = true; arreterCamera(); };
+  }, [scanModal, scanMode]);
 
   async function validerSessionScan(montant: number) {
     if (!scanClient) return;
@@ -576,44 +656,96 @@ export default function AdminScreen() {
             ) : (
               <>
                 <Text style={styles.scanModalTitle}>Valider une session</Text>
-                <Text style={styles.scanModalDesc}>
-                  Demandez au client d'ouvrir son profil dans l'app.{'\n'}
-                  Copiez l'ID affiché sous son QR code.
-                </Text>
 
-                <Text style={styles.scanModalLabel}>ID client (UUID complet)</Text>
-                <TextInput
-                  style={styles.scanInput}
-                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                  value={scanId}
-                  onChangeText={(v) => { setScanId(v); setScanErreur(null); }}
-                  placeholderTextColor="#bbb"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  onSubmitEditing={rechercherClientScan}
-                  autoFocus
-                />
+                {/* Sélecteur de mode */}
+                <View style={styles.scanModeRow}>
+                  <TouchableOpacity
+                    style={[styles.scanModeBtn, scanMode === 'saisie' && styles.scanModeBtnActif]}
+                    onPress={() => setScanMode('saisie')}
+                    activeOpacity={0.8}>
+                    <Text style={[styles.scanModeText, scanMode === 'saisie' && styles.scanModeTextActif]}>
+                      ⌨️ Douchette / Clavier
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.scanModeBtn, scanMode === 'camera' && styles.scanModeBtnActif]}
+                    onPress={() => setScanMode('camera')}
+                    activeOpacity={0.8}>
+                    <Text style={[styles.scanModeText, scanMode === 'camera' && styles.scanModeTextActif]}>
+                      📷 Caméra
+                    </Text>
+                  </TouchableOpacity>
+                </View>
 
-                {scanErreur && (
-                  <View style={styles.scanErreurBox}>
-                    <Text style={styles.scanErreurText}>⚠️  {scanErreur}</Text>
-                  </View>
+                {scanMode === 'saisie' ? (
+                  <>
+                    <Text style={styles.scanModalDesc}>
+                      Scannez avec une douchette (envoie l'ID + Entrée automatiquement), ou collez l'ID client affiché sous le QR code.
+                    </Text>
+                    <TextInput
+                      style={styles.scanInput}
+                      placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                      value={scanId}
+                      onChangeText={(v) => { setScanId(v); setScanErreur(null); }}
+                      placeholderTextColor="#bbb"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      onSubmitEditing={rechercherClientScan}
+                      autoFocus
+                    />
+                    {scanErreur && (
+                      <View style={styles.scanErreurBox}>
+                        <Text style={styles.scanErreurText}>⚠️  {scanErreur}</Text>
+                      </View>
+                    )}
+                    <TouchableOpacity
+                      style={[styles.scanActionBtn, (!scanId.trim() || scanLoading) && styles.scanActionBtnDisabled]}
+                      onPress={rechercherClientScan}
+                      disabled={!scanId.trim() || scanLoading}
+                      activeOpacity={0.8}>
+                      {scanLoading
+                        ? <ActivityIndicator color="#fff" />
+                        : <Text style={styles.scanActionBtnText}>Rechercher ce client →</Text>
+                      }
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    {Platform.OS === 'web' && typeof window !== 'undefined' && 'BarcodeDetector' in window ? (
+                      <View style={styles.scanVideoWrap}>
+                        {/* @ts-ignore */}
+                        <video
+                          ref={videoRef}
+                          style={{ width: '100%', borderRadius: 10, display: 'block', maxHeight: 220, objectFit: 'cover' } as any}
+                          playsInline
+                          muted
+                        />
+                        {scanLoading && (
+                          <View style={styles.scanVideoOverlay}>
+                            <ActivityIndicator color="#fff" size="large" />
+                          </View>
+                        )}
+                        <Text style={styles.scanVideoHint}>Pointez la caméra vers le QR code du client</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.scanCameraUnsupported}>
+                        <Text style={styles.scanCameraUnsupportedText}>
+                          ⚠️  BarcodeDetector n'est pas supporté sur ce navigateur.{'\n'}
+                          Utilisez Chrome ou Edge, ou passez en mode Douchette / Clavier.
+                        </Text>
+                      </View>
+                    )}
+                    {scanErreur && (
+                      <View style={styles.scanErreurBox}>
+                        <Text style={styles.scanErreurText}>⚠️  {scanErreur}</Text>
+                      </View>
+                    )}
+                  </>
                 )}
-
-                <TouchableOpacity
-                  style={[styles.scanActionBtn, (!scanId.trim() || scanLoading) && styles.scanActionBtnDisabled]}
-                  onPress={rechercherClientScan}
-                  disabled={!scanId.trim() || scanLoading}
-                  activeOpacity={0.8}>
-                  {scanLoading
-                    ? <ActivityIndicator color="#fff" />
-                    : <Text style={styles.scanActionBtnText}>Rechercher ce client →</Text>
-                  }
-                </TouchableOpacity>
               </>
             )}
 
-            <TouchableOpacity style={styles.scanFermerBtn} onPress={() => setScanModal(false)} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.scanFermerBtn} onPress={fermerScanModal} activeOpacity={0.8}>
               <Text style={styles.scanFermerText}>Fermer</Text>
             </TouchableOpacity>
           </View>
@@ -771,4 +903,22 @@ const styles = StyleSheet.create({
     borderWidth: 0.5, borderColor: '#ddd',
   },
   scanFermerText: { color: '#888', fontSize: 14 },
+  scanModeRow: {
+    flexDirection: 'row', backgroundColor: '#f0f0f0', borderRadius: 10, overflow: 'hidden',
+  },
+  scanModeBtn: { flex: 1, paddingVertical: 9, alignItems: 'center' },
+  scanModeBtnActif: { backgroundColor: '#0D0D0D' },
+  scanModeText: { fontSize: 12, fontWeight: '500', color: '#888' },
+  scanModeTextActif: { color: '#fff' },
+  scanVideoWrap: { borderRadius: 10, overflow: 'hidden', position: 'relative' },
+  scanVideoOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center',
+  },
+  scanVideoHint: { fontSize: 12, color: '#888', textAlign: 'center', marginTop: 6 },
+  scanCameraUnsupported: {
+    backgroundColor: '#fff8e1', borderRadius: 10, padding: 14,
+    borderWidth: 0.5, borderColor: '#ffe082',
+  },
+  scanCameraUnsupportedText: { color: '#795548', fontSize: 13, lineHeight: 20 },
 });
