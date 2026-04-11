@@ -1,6 +1,6 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, Alert, Platform, StyleSheet, Text,
   TextInput, TouchableOpacity, View,
@@ -9,32 +9,84 @@ import { supabase } from '../supabase';
 import { Client } from '../lib/types';
 import { calculerNiveau, initiales } from '../lib/utils';
 
-// ─── Fallback web : saisie manuelle de l'ID client ───────────────────────────
+// ─── Web scanner : BarcodeDetector + fallback saisie manuelle ────────────────
 
 function ScannerWeb() {
   const [idInput, setIdInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [client, setClient] = useState<Client | null>(null);
+  const [scanMode, setScanMode] = useState<'idle' | 'scanning' | 'unsupported'>('idle');
+  const [scanError, setScanError] = useState<string | null>(null);
+  const videoRef = useRef<any>(null);
+  const streamRef = useRef<any>(null);
+  const animRef = useRef<number | null>(null);
 
-  async function rechercherClient() {
-    const id = idInput.trim();
-    if (!id) return;
+  function arreterScanner() {
+    if (animRef.current) { cancelAnimationFrame(animRef.current); animRef.current = null; }
+    if (streamRef.current) { streamRef.current.getTracks().forEach((t: MediaStreamTrack) => t.stop()); streamRef.current = null; }
+  }
+
+  async function demarrerScanner() {
+    setScanError(null);
+    if (typeof window === 'undefined' || !('BarcodeDetector' in window)) {
+      setScanMode('unsupported');
+      return;
+    }
+    setScanMode('scanning');
+  }
+
+  useEffect(() => {
+    if (scanMode !== 'scanning') return;
+    let stopped = false;
+
+    async function start() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        if (stopped) { stream.getTracks().forEach((t: MediaStreamTrack) => t.stop()); return; }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play();
+        }
+        const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
+        const scan = async () => {
+          if (stopped || !videoRef.current) return;
+          try {
+            const codes = await detector.detect(videoRef.current);
+            if (codes.length > 0) {
+              arreterScanner();
+              setScanMode('idle');
+              await rechercherClientById(codes[0].rawValue);
+              return;
+            }
+          } catch {}
+          animRef.current = requestAnimationFrame(scan);
+        };
+        animRef.current = requestAnimationFrame(scan);
+      } catch {
+        setScanError("Impossible d'accéder à la caméra.");
+        setScanMode('unsupported');
+      }
+    }
+
+    start();
+    return () => { stopped = true; arreterScanner(); };
+  }, [scanMode]);
+
+  async function rechercherClientById(id: string) {
+    if (!id.trim()) return;
     setLoading(true);
-
-    const { data, error } = await supabase
-      .from('clients')
-      .select('*')
-      .eq('id', id)
-      .single();
-
+    const { data, error } = await supabase.from('clients').select('*').eq('id', id.trim()).single();
     setLoading(false);
-
     if (error || !data) {
       window.alert('QR code non reconnu\nCe code ne correspond à aucun client TRAMPO CITY.');
       return;
     }
-
     setClient(data as Client);
+  }
+
+  async function rechercherClient() {
+    await rechercherClientById(idInput);
   }
 
   async function valider(montant: number) {
@@ -99,16 +151,56 @@ function ScannerWeb() {
     );
   }
 
+  // Camera scanning view
+  if (scanMode === 'scanning') {
+    return (
+      <View style={styles.webContainer}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => { arreterScanner(); setScanMode('idle'); }}>
+          <Text style={styles.backText}>← Retour</Text>
+        </TouchableOpacity>
+        <View style={styles.webScannerWrap}>
+          {/* @ts-ignore — video element, web only */}
+          <video
+            ref={videoRef}
+            style={{ width: '100%', maxWidth: 400, borderRadius: 16, display: 'block' } as any}
+            playsInline
+            muted
+          />
+          {loading && <ActivityIndicator size="large" color="#E31E24" style={{ marginTop: 16 }} />}
+          <Text style={styles.scanText}>Pointez la caméra vers le QR code du client</Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.webContainer}>
       <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
         <Text style={styles.backText}>← Retour</Text>
       </TouchableOpacity>
       <View style={styles.webCard}>
-        <Text style={styles.webIcon}>📋</Text>
-        <Text style={styles.webTitle}>Saisie manuelle</Text>
+        <Text style={styles.webIcon}>📷</Text>
+        <Text style={styles.webTitle}>Scanner un client</Text>
+
+        {scanError && (
+          <View style={styles.webErrorBox}>
+            <Text style={styles.webErrorText}>{scanError}</Text>
+          </View>
+        )}
+
+        {scanMode !== 'unsupported' && (
+          <TouchableOpacity style={styles.btn} onPress={demarrerScanner} activeOpacity={0.8}>
+            <Text style={styles.btnText}>📷 Scanner le QR code</Text>
+          </TouchableOpacity>
+        )}
+
+        <View style={styles.webDivider}>
+          <View style={styles.webDividerLine} />
+          <Text style={styles.webDividerText}>ou saisie manuelle</Text>
+          <View style={styles.webDividerLine} />
+        </View>
+
         <Text style={styles.webDesc}>
-          Le scanner QR est disponible sur l'application mobile.{'\n'}
           Entrez l'ID client affiché sous le QR code.
         </Text>
         <TextInput
@@ -358,4 +450,10 @@ const styles = StyleSheet.create({
     width: '100%', backgroundColor: '#f7f7f5', borderRadius: 12, borderWidth: 0.5,
     borderColor: '#ddd', padding: 14, fontSize: 14, color: '#1a1a1a',
   },
+  webScannerWrap: { alignItems: 'center', marginTop: 16 },
+  webErrorBox: { backgroundColor: '#fff5f5', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#fcc', width: '100%' },
+  webErrorText: { color: '#c0392b', fontSize: 13 },
+  webDivider: { flexDirection: 'row', alignItems: 'center', gap: 8, width: '100%' },
+  webDividerLine: { flex: 1, height: 0.5, backgroundColor: '#ddd' },
+  webDividerText: { fontSize: 12, color: '#aaa' },
 });

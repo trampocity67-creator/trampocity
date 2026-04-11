@@ -14,6 +14,19 @@ export default function LoginScreen() {
   const [isRegister, setIsRegister] = useState(false);
   const [nom, setNom] = useState('');
   const [erreur, setErreur] = useState<string | null>(null);
+  const [resetEnvoye, setResetEnvoye] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+
+  async function handleResetPassword() {
+    if (!emailValide(email)) {
+      setErreur('Entrez votre email pour recevoir le lien de réinitialisation.');
+      return;
+    }
+    setResetLoading(true);
+    await supabase.auth.resetPasswordForEmail(email.trim());
+    setResetLoading(false);
+    setResetEnvoye(true);
+  }
 
   function validerFormulaire(): string | null {
     if (isRegister && nom.trim().length < 2) return 'Veuillez entrer votre nom complet.';
@@ -128,6 +141,19 @@ export default function LoginScreen() {
             }
           </TouchableOpacity>
 
+          {!isRegister && (
+            resetEnvoye
+              ? <View style={styles.resetBox}>
+                  <Text style={styles.resetOkText}>✅ Email envoyé ! Vérifiez votre boîte mail.</Text>
+                </View>
+              : <TouchableOpacity onPress={handleResetPassword} disabled={resetLoading} activeOpacity={0.7} style={styles.resetBtn}>
+                  {resetLoading
+                    ? <ActivityIndicator size="small" color="#E31E24" />
+                    : <Text style={styles.resetText}>Mot de passe oublié ?</Text>
+                  }
+                </TouchableOpacity>
+          )}
+
           <TouchableOpacity onPress={basculerMode} activeOpacity={0.7} style={styles.switchBtn}>
             <Text style={styles.switchText}>
               {isRegister ? 'Déjà un compte ? ' : "Pas de compte ? "}
@@ -197,4 +223,8 @@ const styles = StyleSheet.create({
 
   installBtn: { alignItems: 'center', marginTop: 8 },
   installText: { color: '#bbb', fontSize: 13 },
+  resetBtn: { alignItems: 'flex-end' },
+  resetText: { color: '#E31E24', fontSize: 13 },
+  resetBox: { backgroundColor: '#f0faf0', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#c3e6cb' },
+  resetOkText: { color: '#2d6a4f', fontSize: 13 },
 });

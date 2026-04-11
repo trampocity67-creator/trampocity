@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { supabase } from '../../supabase';
@@ -9,6 +9,17 @@ import { initiales } from '../../lib/utils';
 export default function ProfileScreen() {
   const { client, loading } = useClient();
   const [infoExpanded, setInfoExpanded] = useState(false);
+  const [recompenses, setRecompenses] = useState<{ recompense_nom: string; points_depenses: number; created_at: string }[]>([]);
+
+  useEffect(() => {
+    if (!client?.id) return;
+    supabase
+      .from('recompenses_utilisees')
+      .select('recompense_nom, points_depenses, created_at')
+      .eq('client_id', client.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => setRecompenses(data ?? []));
+  }, [client?.id]);
 
   async function seDeconnecter() {
     const doSignOut = async () => { await supabase.auth.signOut(); };
@@ -91,6 +102,27 @@ export default function ProfileScreen() {
               <Text style={styles.infoVal}>{client?.email}</Text>
             </View>
           </View>
+        )}
+
+        <Text style={[styles.sectionTitle, { marginTop: 12 }]}>Récompenses utilisées</Text>
+
+        {recompenses.length === 0 ? (
+          <View style={styles.recompenseEmpty}>
+            <Text style={styles.recompenseEmptyText}>Aucune récompense utilisée pour l'instant</Text>
+          </View>
+        ) : (
+          recompenses.map((r, i) => (
+            <View key={i} style={styles.recompenseItem}>
+              <Text style={styles.recompenseEmoji}>🎁</Text>
+              <View style={styles.recompenseInfo}>
+                <Text style={styles.recompenseNom}>{r.recompense_nom}</Text>
+                <Text style={styles.recompenseDate}>
+                  {new Date(r.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                </Text>
+              </View>
+              <Text style={styles.recompensePts}>−{r.points_depenses} pts</Text>
+            </View>
+          ))
         )}
 
         <Text style={[styles.sectionTitle, { marginTop: 12 }]}>Nous trouver</Text>
@@ -193,4 +225,12 @@ const styles = StyleSheet.create({
     borderColor: '#ddd', padding: 14, alignItems: 'center', marginTop: 8,
   },
   logoutText: { color: '#E24B4A', fontSize: 14, fontWeight: '500' },
+  recompenseEmpty: { backgroundColor: '#fff', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 8, borderWidth: 0.5, borderColor: '#ddd' },
+  recompenseEmptyText: { color: '#888', fontSize: 13 },
+  recompenseItem: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 0.5, borderColor: '#ddd', padding: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  recompenseEmoji: { fontSize: 22 },
+  recompenseInfo: { flex: 1 },
+  recompenseNom: { fontSize: 13, fontWeight: '500', color: '#1a1a1a' },
+  recompenseDate: { fontSize: 11, color: '#888', marginTop: 2 },
+  recompensePts: { fontSize: 13, fontWeight: '500', color: '#E31E24' },
 });

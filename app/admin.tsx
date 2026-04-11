@@ -28,15 +28,23 @@ function confirmer(titre: string, message: string, onConfirm: () => void) {
   }
 }
 
+interface Stats {
+  sessionsSemaine: { jour: string; count: number }[];
+  pointsAujourdhui: number;
+  nouveauxMois: number;
+  top3: { nom: string; sessions: number }[];
+}
+
 export default function AdminScreen() {
   const [clients, setClients] = useState<Client[]>([]);
   const [clientsFiltres, setClientsFiltres] = useState<Client[]>([]);
   const [clientsInactifs, setClientsInactifs] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [recherche, setRecherche] = useState('');
-  const [onglet, setOnglet] = useState<'tous' | 'inactifs'>('tous');
+  const [onglet, setOnglet] = useState<'tous' | 'inactifs' | 'stats'>('tous');
   const [notifOuverte, setNotifOuverte] = useState<string | null>(null);
   const [notifTexte, setNotifTexte] = useState('');
+  const [stats, setStats] = useState<Stats | null>(null);
 
   useEffect(() => {
     verifierAdmin();
@@ -104,7 +112,69 @@ export default function AdminScreen() {
     });
     setClientsInactifs(inactifs);
 
+    await chargerStats();
     setLoading(false);
+  }
+
+  async function chargerStats() {
+    const maintenant = new Date();
+    const debutSemaine = new Date(maintenant);
+    debutSemaine.setDate(maintenant.getDate() - 6);
+    debutSemaine.setHours(0, 0, 0, 0);
+
+    const debutJour = new Date(maintenant);
+    debutJour.setHours(0, 0, 0, 0);
+
+    const debutMois = new Date(maintenant.getFullYear(), maintenant.getMonth(), 1);
+
+    const [sessionsRes, clientsRes] = await Promise.all([
+      supabase.from('sessions').select('client_id, points_gagnes, created_at').gte('created_at', debutSemaine.toISOString()),
+      supabase.from('clients').select('id, nom, created_at'),
+    ]);
+
+    const sessions = sessionsRes.data || [];
+    const allClients = clientsRes.data || [];
+
+    // Sessions par jour sur 7 jours
+    const JOURS = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+    const countParJour: Record<string, number> = {};
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(maintenant);
+      d.setDate(maintenant.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      countParJour[key] = 0;
+    }
+    sessions.forEach(s => {
+      const key = s.created_at.slice(0, 10);
+      if (key in countParJour) countParJour[key]++;
+    });
+    const sessionsSemaine = Object.entries(countParJour).map(([date, count]) => ({
+      jour: JOURS[new Date(date + 'T12:00:00').getDay()],
+      count,
+    }));
+
+    // Points distribués aujourd'hui
+    const pointsAujourdhui = sessions
+      .filter(s => s.created_at >= debutJour.toISOString())
+      .reduce((acc, s) => acc + (s.points_gagnes || 0), 0);
+
+    // Nouveaux clients ce mois
+    const nouveauxMois = allClients.filter(c => c.created_at >= debutMois.toISOString()).length;
+
+    // Top 3 clients les plus actifs (sessions semaine)
+    const sessionsParClient: Record<string, number> = {};
+    sessions.forEach(s => {
+      sessionsParClient[s.client_id] = (sessionsParClient[s.client_id] || 0) + 1;
+    });
+    const top3 = Object.entries(sessionsParClient)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([id, count]) => ({
+        nom: allClients.find(c => c.id === id)?.nom ?? id.slice(0, 8),
+        sessions: count,
+      }));
+
+    setStats({ sessionsSemaine, pointsAujourdhui, nouveauxMois, top3 });
   }
 
   function ajouterPoints(client: Client, montant: number) {
@@ -322,7 +392,15 @@ export default function AdminScreen() {
           onPress={() => setOnglet('inactifs')}
           activeOpacity={0.8}>
           <Text style={[styles.ongletText, onglet === 'inactifs' && styles.ongletTextActif]}>
-            Inactifs +14j ({clientsInactifs.length})
+            Inactifs ({clientsInactifs.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.onglet, onglet === 'stats' && styles.ongletActif]}
+          onPress={() => setOnglet('stats')}
+          activeOpacity={0.8}>
+          <Text style={[styles.ongletText, onglet === 'stats' && styles.ongletTextActif]}>
+            Stats 📈
           </Text>
         </TouchableOpacity>
       </View>
@@ -341,17 +419,72 @@ export default function AdminScreen() {
         </View>
       )}
 
-      <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
-        {listeAffichee.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>
-              {onglet === 'inactifs' ? 'Aucun client inactif 🎉' : 'Aucun client trouvé'}
-            </Text>
-          </View>
-        ) : (
-          listeAffichee.map((c, index) => renderClientCard(c, index, onglet === 'inactifs'))
-        )}
-      </ScrollView>
+      {onglet === 'stats' ? (
+        <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
+          {stats ? (
+            <>
+              {/* Points aujourd'hui + nouveaux clients */}
+              <View style={styles.statsGrid}>
+                <View style={styles.statsGridCard}>
+                  <Text style={styles.statsGridVal}>{stats.pointsAujourdhui.toLocaleString('fr-FR')}</Text>
+                  <Text style={styles.statsGridLbl}>Points distribués{'\n'}aujourd'hui</Text>
+                </View>
+                <View style={styles.statsGridCard}>
+                  <Text style={styles.statsGridVal}>{stats.nouveauxMois}</Text>
+                  <Text style={styles.statsGridLbl}>Nouveaux clients{'\n'}ce mois</Text>
+                </View>
+              </View>
+
+              {/* Sessions par jour */}
+              <View style={styles.statsCard}>
+                <Text style={styles.statsCardTitle}>Sessions — 7 derniers jours</Text>
+                <View style={styles.barChart}>
+                  {stats.sessionsSemaine.map(({ jour, count }) => {
+                    const max = Math.max(...stats.sessionsSemaine.map(s => s.count), 1);
+                    const h = Math.max((count / max) * 80, count > 0 ? 6 : 2);
+                    return (
+                      <View key={jour} style={styles.barCol}>
+                        <Text style={styles.barCount}>{count > 0 ? count : ''}</Text>
+                        <View style={[styles.bar, { height: h }]} />
+                        <Text style={styles.barLabel}>{jour}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Top 3 */}
+              <View style={styles.statsCard}>
+                <Text style={styles.statsCardTitle}>Top 3 — cette semaine</Text>
+                {stats.top3.length === 0
+                  ? <Text style={styles.statsEmpty}>Aucune session cette semaine</Text>
+                  : stats.top3.map((c, i) => (
+                      <View key={c.nom} style={styles.topRow}>
+                        <Text style={styles.topMedal}>{['🥇', '🥈', '🥉'][i]}</Text>
+                        <Text style={styles.topNom}>{c.nom}</Text>
+                        <Text style={styles.topCount}>{c.sessions} session{c.sessions > 1 ? 's' : ''}</Text>
+                      </View>
+                    ))
+                }
+              </View>
+            </>
+          ) : (
+            <ActivityIndicator color="#E31E24" style={{ marginTop: 40 }} />
+          )}
+        </ScrollView>
+      ) : (
+        <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
+          {listeAffichee.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>
+                {onglet === 'inactifs' ? 'Aucun client inactif 🎉' : 'Aucun client trouvé'}
+              </Text>
+            </View>
+          ) : (
+            listeAffichee.map((c, index) => renderClientCard(c, index, onglet === 'inactifs'))
+          )}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -441,4 +574,27 @@ const styles = StyleSheet.create({
     alignItems: 'center', borderWidth: 0.5, borderColor: '#FFB74D',
   },
   relanceBtnText: { color: '#E65100', fontSize: 12, fontWeight: '500' },
+  // Stats
+  statsGrid: { flexDirection: 'row', gap: 10, marginBottom: 10 },
+  statsGridCard: {
+    flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: 14,
+    alignItems: 'center', borderWidth: 0.5, borderColor: '#ddd',
+  },
+  statsGridVal: { fontSize: 26, fontWeight: '700', color: '#E31E24' },
+  statsGridLbl: { fontSize: 11, color: '#888', marginTop: 4, textAlign: 'center', lineHeight: 16 },
+  statsCard: {
+    backgroundColor: '#fff', borderRadius: 14, borderWidth: 0.5,
+    borderColor: '#ddd', padding: 14, marginBottom: 10,
+  },
+  statsCardTitle: { fontSize: 12, fontWeight: '600', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 14 },
+  statsEmpty: { color: '#bbb', fontSize: 13, textAlign: 'center', paddingVertical: 8 },
+  barChart: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', height: 100 },
+  barCol: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
+  barCount: { fontSize: 10, color: '#E31E24', fontWeight: '600' },
+  bar: { width: '60%', backgroundColor: '#E31E24', borderRadius: 4 },
+  barLabel: { fontSize: 10, color: '#888', marginTop: 2 },
+  topRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 0.5, borderBottomColor: '#f0f0f0', gap: 10 },
+  topMedal: { fontSize: 18 },
+  topNom: { flex: 1, fontSize: 13, color: '#1a1a1a', fontWeight: '500' },
+  topCount: { fontSize: 12, color: '#888' },
 });
