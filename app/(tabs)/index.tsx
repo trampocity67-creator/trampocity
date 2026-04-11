@@ -61,10 +61,14 @@ export default function HomeScreen() {
           <Text style={styles.pointsLabel}>MES POINTS</Text>
           <Text style={styles.pointsValue}>{client?.points?.toLocaleString('fr-FR')}</Text>
 
+          <Text style={styles.classementLabel}>CLASSEMENT 🏆</Text>
           {classement ? (
             <View style={styles.classementRow}>
               <Text style={styles.classementRang}>#{classement.rang}</Text>
-              <Text style={styles.classementSur}> sur {classement.total} membres</Text>
+              <View style={styles.classementMeta}>
+                <Text style={styles.classementSur}>sur {classement.total} membres</Text>
+                <Text style={styles.classementHint}>votre place au classement</Text>
+              </View>
             </View>
           ) : (
             <Text style={styles.classementPlaceholder}>Calcul du classement…</Text>
@@ -174,9 +178,12 @@ const styles = StyleSheet.create({
   },
   pointsLabel: { color: '#fff', fontSize: 11, opacity: 0.8, letterSpacing: 0.5 },
   pointsValue: { color: '#fff', fontSize: 42, fontWeight: '500', marginVertical: 6 },
-  classementRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: 4 },
-  classementRang: { color: '#fff', fontSize: 22, fontWeight: '700' },
-  classementSur: { color: '#fff', fontSize: 13, opacity: 0.8 },
+  classementLabel: { color: '#fff', fontSize: 10, opacity: 0.7, letterSpacing: 0.5, marginTop: 8 },
+  classementRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 3 },
+  classementRang: { color: '#fff', fontSize: 34, fontWeight: '800' },
+  classementMeta: { gap: 1 },
+  classementSur: { color: '#fff', fontSize: 13, opacity: 0.85 },
+  classementHint: { color: '#fff', fontSize: 10, opacity: 0.6 },
   classementPlaceholder: { color: '#fff', fontSize: 13, opacity: 0.6, marginTop: 4 },
   body: { padding: 16 },
   infoCard: {

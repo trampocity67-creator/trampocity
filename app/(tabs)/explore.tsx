@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Platform, ScrollView, StyleSheet,
+  ActivityIndicator, Alert, Modal, Platform, ScrollView, StyleSheet,
   Text, TouchableOpacity, View,
 } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
 import { supabase } from '../../supabase';
 import { useClient } from '../../context/ClientContext';
 import { prenomInitiale } from '../../lib/utils';
@@ -28,7 +29,7 @@ const RECOMPENSES: Recompense[] = [
   { nom: 'Accès VIP 2h', desc: 'Zone exclusive + boisson', points: 2000, emoji: '⭐', bg: '#FAEEDA' },
 ];
 
-const MEDAILLES = ['🥇', '🥈', '🥉'];
+const MEDAILLES = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
 
 function alerter(titre: string, message: string) {
   if (Platform.OS === 'web') {
@@ -50,9 +51,11 @@ function confirmer(message: string, onConfirm: () => void) {
 }
 
 export default function RewardsScreen() {
-  const { client, loading, refresh } = useClient();
+  const { client, loading } = useClient();
   const [top5, setTop5] = useState<TopClient[]>([]);
   const [top5Loading, setTop5Loading] = useState(true);
+  const [qrModal, setQrModal] = useState<Recompense | null>(null);
+  const [demandeEnCours, setDemandeEnCours] = useState(false);
 
   useEffect(() => {
     supabase
@@ -66,40 +69,28 @@ export default function RewardsScreen() {
       });
   }, []);
 
-  async function utiliserRecompense(recompense: Recompense) {
+  async function demanderRecompense(recompense: Recompense) {
     if (!client) return;
-
     if (client.points < recompense.points) {
-      alerter(
-        'Points insuffisants',
-        `Il vous faut encore ${(recompense.points - client.points).toLocaleString('fr-FR')} pts.`
-      );
+      alerter('Points insuffisants', `Il vous faut encore ${(recompense.points - client.points).toLocaleString('fr-FR')} pts.`);
       return;
     }
-
     confirmer(
-      `Utiliser "${recompense.nom}" pour ${recompense.points} pts ?`,
+      `Demander "${recompense.nom}" pour ${recompense.points} pts ?`,
       async () => {
-        const nouveauxPoints = client.points - recompense.points;
-
-        const [insertRes, updateRes] = await Promise.all([
-          supabase.from('recompenses_utilisees').insert({
-            client_id: client.id,
-            recompense_nom: recompense.nom,
-            points_depenses: recompense.points,
-          }),
-          supabase.from('clients').update({
-            points: nouveauxPoints,
-          }).eq('id', client.id),
-        ]);
-
-        if (insertRes.error || updateRes.error) {
-          alerter('Erreur', "Impossible d'utiliser la récompense. Réessayez.");
+        setDemandeEnCours(true);
+        const { error } = await supabase.from('recompenses_utilisees').insert({
+          client_id: client.id,
+          recompense_nom: recompense.nom,
+          points_depenses: recompense.points,
+          statut: 'en_attente',
+        });
+        setDemandeEnCours(false);
+        if (error) {
+          alerter('Erreur', "Impossible d'envoyer la demande. Réessayez.");
           return;
         }
-
-        await refresh();
-        alerter('✅ Récompense activée !', `Profitez de votre ${recompense.nom} !`);
+        setQrModal(recompense);
       }
     );
   }
@@ -135,7 +126,7 @@ export default function RewardsScreen() {
                 <View
                   key={c.id}
                   style={[styles.topRow, i === top5.length - 1 && styles.topRowLast, isMe && styles.topRowMe]}>
-                  <Text style={styles.topMedal}>{MEDAILLES[i] ?? `${i + 1}`}</Text>
+                  <Text style={styles.topMedal}>{MEDAILLES[i]}</Text>
                   <Text style={[styles.topNom, isMe && styles.topNomMe]}>
                     {prenomInitiale(c.nom)}{isMe ? ' (moi)' : ''}
                   </Text>
@@ -164,10 +155,10 @@ export default function RewardsScreen() {
                 <View style={styles.rewardFooter}>
                   <Text style={styles.rewardCost}>{r.points.toLocaleString('fr-FR')} pts</Text>
                   <TouchableOpacity
-                    style={[styles.btn, !suffisant && styles.btnLocked]}
-                    onPress={() => suffisant && utiliserRecompense(r)}
+                    style={[styles.btn, (!suffisant || demandeEnCours) && styles.btnLocked]}
+                    onPress={() => suffisant && demanderRecompense(r)}
                     activeOpacity={suffisant ? 0.8 : 1}
-                    disabled={!suffisant}>
+                    disabled={!suffisant || demandeEnCours}>
                     <Text style={[styles.btnText, !suffisant && styles.btnLockedText]}>
                       {suffisant ? 'Utiliser' : 'Insuffisant'}
                     </Text>
@@ -178,6 +169,40 @@ export default function RewardsScreen() {
           );
         })}
       </ScrollView>
+
+      {/* Modal QR code récompense */}
+      <Modal
+        visible={qrModal !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setQrModal(null)}>
+        <View style={styles.qrOverlay}>
+          <View style={styles.qrCard}>
+            <Text style={styles.qrEmoji}>{qrModal?.emoji}</Text>
+            <Text style={styles.qrTitle}>{qrModal?.nom}</Text>
+            <Text style={styles.qrDesc}>
+              Montrez ce QR code à l'équipe Trampo City pour valider votre récompense
+            </Text>
+            <View style={styles.qrWrap}>
+              <QRCode
+                value={client?.id ?? 'trampo-city'}
+                size={200}
+                color="#0D0D0D"
+                backgroundColor="white"
+              />
+            </View>
+            <Text style={styles.qrIdText}>ID : {client?.id?.substring(0, 8).toUpperCase()}</Text>
+            <View style={styles.qrInfoBadge}>
+              <Text style={styles.qrInfoText}>
+                ⏳ Votre demande est en attente de validation par l'équipe
+              </Text>
+            </View>
+            <TouchableOpacity style={styles.qrFermerBtn} onPress={() => setQrModal(null)} activeOpacity={0.8}>
+              <Text style={styles.qrFermerText}>Fermer</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -228,4 +253,25 @@ const styles = StyleSheet.create({
   btnText: { fontSize: 11, color: '#E31E24', fontWeight: '500' },
   btnLocked: { borderColor: '#ddd' },
   btnLockedText: { color: '#888' },
+  // Modal QR récompense
+  qrOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center', alignItems: 'center', padding: 24,
+  },
+  qrCard: {
+    backgroundColor: '#fff', borderRadius: 20, padding: 24,
+    width: '100%', maxWidth: 400, alignItems: 'center', gap: 10,
+  },
+  qrEmoji: { fontSize: 40 },
+  qrTitle: { fontSize: 18, fontWeight: '600', color: '#1a1a1a', textAlign: 'center' },
+  qrDesc: { fontSize: 13, color: '#666', textAlign: 'center', lineHeight: 19 },
+  qrWrap: { padding: 16, backgroundColor: '#fff', borderRadius: 12, borderWidth: 0.5, borderColor: '#eee', marginVertical: 4 },
+  qrIdText: { fontSize: 11, color: '#aaa', fontFamily: 'monospace' },
+  qrInfoBadge: { backgroundColor: '#FFF8E1', borderRadius: 10, padding: 12, borderWidth: 0.5, borderColor: '#FFE082', width: '100%' },
+  qrInfoText: { fontSize: 12, color: '#795548', textAlign: 'center', lineHeight: 18 },
+  qrFermerBtn: {
+    backgroundColor: '#f0f0f0', borderRadius: 12, paddingVertical: 12,
+    paddingHorizontal: 32, marginTop: 4,
+  },
+  qrFermerText: { color: '#555', fontSize: 14, fontWeight: '500' },
 });

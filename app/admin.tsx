@@ -29,6 +29,16 @@ function confirmer(titre: string, message: string, onConfirm: () => void) {
   }
 }
 
+interface Demande {
+  id: string;
+  client_id: string;
+  recompense_nom: string;
+  points_depenses: number;
+  created_at: string;
+  client_nom?: string;
+  client_points?: number;
+}
+
 interface Stats {
   sessionsSemaine: { jour: string; count: number }[];
   pointsAujourdhui: number;
@@ -42,7 +52,9 @@ export default function AdminScreen() {
   const [clientsInactifs, setClientsInactifs] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [recherche, setRecherche] = useState('');
-  const [onglet, setOnglet] = useState<'tous' | 'inactifs' | 'stats'>('tous');
+  const [onglet, setOnglet] = useState<'tous' | 'inactifs' | 'stats' | 'recompenses'>('tous');
+  const [demandes, setDemandes] = useState<Demande[]>([]);
+  const [demandesLoading, setDemandesLoading] = useState(false);
   const [notifOuverte, setNotifOuverte] = useState<string | null>(null);
   const [notifTexte, setNotifTexte] = useState('');
   const [stats, setStats] = useState<Stats | null>(null);
@@ -232,7 +244,6 @@ export default function AdminScreen() {
 
         await supabase.from('clients').update({
           points: nouveauxPoints,
-          niveau: calculerNiveau(nouveauxPoints),
         }).eq('id', client.id);
 
         chargerClients();
@@ -360,16 +371,17 @@ export default function AdminScreen() {
       }),
       supabase.from('clients').update({
         points: nouveauxPoints,
-        niveau: calculerNiveau(nouveauxPoints),
       }).eq('id', scanClient.id),
     ]);
 
     if (sessionRes.error || updateRes.error) {
-      alerter('Erreur', "La session n'a pas pu être enregistrée.");
+      const err = sessionRes.error?.message || updateRes.error?.message || 'Erreur inconnue';
+      console.error('[validerSessionScan] erreur Supabase:', sessionRes.error, updateRes.error);
+      alerter('Erreur', `La session n'a pas pu être enregistrée.\n${err}`);
       return;
     }
 
-    await envoyerNotification(
+    void envoyerNotification(
       scanClient.id,
       'TRAMPO CITY 🤸',
       `Vous avez gagné ${montant} points ! Solde : ${nouveauxPoints.toLocaleString('fr-FR')} points 🤸`,
@@ -381,6 +393,71 @@ export default function AdminScreen() {
     setScanId('');
     setScanErreur(null);
     chargerClients();
+  }
+
+  async function chargerDemandes() {
+    setDemandesLoading(true);
+    const { data, error } = await supabase
+      .from('recompenses_utilisees')
+      .select('id, client_id, recompense_nom, points_depenses, created_at, clients(nom, points)')
+      .eq('statut', 'en_attente')
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('[chargerDemandes]', error);
+      setDemandesLoading(false);
+      return;
+    }
+
+    const liste: Demande[] = (data ?? []).map((d: any) => ({
+      id: d.id,
+      client_id: d.client_id,
+      recompense_nom: d.recompense_nom,
+      points_depenses: d.points_depenses,
+      created_at: d.created_at,
+      client_nom: d.clients?.nom,
+      client_points: d.clients?.points,
+    }));
+    setDemandes(liste);
+    setDemandesLoading(false);
+  }
+
+  async function validerDemande(demande: Demande) {
+    const clientPoints = demande.client_points ?? 0;
+    if (clientPoints < demande.points_depenses) {
+      alerter('Points insuffisants', `${demande.client_nom} n'a que ${clientPoints.toLocaleString('fr-FR')} pts (besoin : ${demande.points_depenses.toLocaleString('fr-FR')} pts).`);
+      return;
+    }
+    confirmer(
+      'Valider la récompense',
+      `Valider "${demande.recompense_nom}" pour ${demande.client_nom} (−${demande.points_depenses.toLocaleString('fr-FR')} pts) ?`,
+      async () => {
+        const nouveauxPoints = clientPoints - demande.points_depenses;
+        const [updateStatut, updatePts] = await Promise.all([
+          supabase.from('recompenses_utilisees').update({ statut: 'validee' }).eq('id', demande.id),
+          supabase.from('clients').update({ points: nouveauxPoints }).eq('id', demande.client_id),
+        ]);
+        if (updateStatut.error || updatePts.error) {
+          alerter('Erreur', 'La validation a échoué. Réessayez.');
+          return;
+        }
+        void envoyerNotification(demande.client_id, 'TRAMPO CITY 🎁', `Votre récompense "${demande.recompense_nom}" a été validée ! Profitez-en 🤸`);
+        chargerDemandes();
+        chargerClients();
+      }
+    );
+  }
+
+  async function refuserDemande(demande: Demande) {
+    confirmer(
+      'Refuser la récompense',
+      `Refuser "${demande.recompense_nom}" pour ${demande.client_nom} ?`,
+      async () => {
+        await supabase.from('recompenses_utilisees').update({ statut: 'refusee' }).eq('id', demande.id);
+        void envoyerNotification(demande.client_id, 'TRAMPO CITY 🎁', `Votre demande pour "${demande.recompense_nom}" a été refusée. Contactez notre équipe pour plus d'infos.`);
+        chargerDemandes();
+      }
+    );
   }
 
   async function relancerClient(client: Client) {
@@ -488,6 +565,10 @@ export default function AdminScreen() {
     );
   }
 
+  useEffect(() => {
+    if (onglet === 'recompenses') chargerDemandes();
+  }, [onglet]);
+
   const listeAffichee = onglet === 'tous' ? clientsFiltres : clientsInactifs;
 
   return (
@@ -543,6 +624,14 @@ export default function AdminScreen() {
             Stats 📈
           </Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.onglet, onglet === 'recompenses' && styles.ongletActif]}
+          onPress={() => setOnglet('recompenses')}
+          activeOpacity={0.8}>
+          <Text style={[styles.ongletText, onglet === 'recompenses' && styles.ongletTextActif]}>
+            🎁{demandes.length > 0 ? ` (${demandes.length})` : ''}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {onglet === 'tous' && (
@@ -559,7 +648,47 @@ export default function AdminScreen() {
         </View>
       )}
 
-      {onglet === 'stats' ? (
+      {onglet === 'recompenses' ? (
+        <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
+          <Text style={styles.demandesSectionTitle}>Récompenses à valider</Text>
+          <Text style={styles.demandesDesc}>
+            Quand un client demande une récompense dans l'app, elle apparaît ici. Validez après avoir vérifié son QR code.
+          </Text>
+          {demandesLoading ? (
+            <ActivityIndicator color="#E31E24" style={{ marginTop: 20 }} />
+          ) : demandes.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>Aucune récompense en attente 🎉</Text>
+            </View>
+          ) : (
+            demandes.map(d => (
+              <View key={d.id} style={styles.demandeCard}>
+                <View style={styles.demandeHeader}>
+                  <View style={styles.clientAvatar}>
+                    <Text style={styles.avatarText}>{initiales(d.client_nom ?? '?')}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.demandeNom}>{d.client_nom ?? d.client_id.slice(0, 8)}</Text>
+                    <Text style={styles.demandeRecompense}>{d.recompense_nom}</Text>
+                    <Text style={styles.demandeDate}>
+                      {new Date(d.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </View>
+                  <Text style={styles.demandePts}>−{d.points_depenses.toLocaleString('fr-FR')} pts</Text>
+                </View>
+                <View style={styles.demandeActions}>
+                  <TouchableOpacity style={styles.demandeValiderBtn} onPress={() => validerDemande(d)} activeOpacity={0.8}>
+                    <Text style={styles.demandeValiderText}>✅ Valider</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.demandeRefuserBtn} onPress={() => refuserDemande(d)} activeOpacity={0.8}>
+                    <Text style={styles.demandeRefuserText}>✕ Refuser</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))
+          )}
+        </ScrollView>
+      ) : onglet === 'stats' ? (
         <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
           {stats ? (
             <>
@@ -928,4 +1057,26 @@ const styles = StyleSheet.create({
     borderWidth: 0.5, borderColor: '#ffe082',
   },
   scanCameraUnsupportedText: { color: '#795548', fontSize: 13, lineHeight: 20 },
+  // Onglet récompenses à valider
+  demandesSectionTitle: { fontSize: 14, fontWeight: '600', color: '#1a1a1a', marginBottom: 4 },
+  demandesDesc: { fontSize: 12, color: '#888', lineHeight: 17, marginBottom: 14 },
+  demandeCard: {
+    backgroundColor: '#fff', borderRadius: 14, borderWidth: 0.5,
+    borderColor: '#ddd', padding: 14, marginBottom: 10,
+  },
+  demandeHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  demandeNom: { fontSize: 14, fontWeight: '500', color: '#1a1a1a' },
+  demandeRecompense: { fontSize: 12, color: '#E31E24', fontWeight: '500', marginTop: 1 },
+  demandeDate: { fontSize: 11, color: '#aaa', marginTop: 2 },
+  demandePts: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
+  demandeActions: { flexDirection: 'row', gap: 8 },
+  demandeValiderBtn: {
+    flex: 1, backgroundColor: '#E31E24', borderRadius: 10, padding: 10, alignItems: 'center',
+  },
+  demandeValiderText: { color: '#fff', fontSize: 13, fontWeight: '500' },
+  demandeRefuserBtn: {
+    flex: 1, backgroundColor: '#fff', borderRadius: 10, padding: 10, alignItems: 'center',
+    borderWidth: 0.5, borderColor: '#ddd',
+  },
+  demandeRefuserText: { color: '#888', fontSize: 13 },
 });
