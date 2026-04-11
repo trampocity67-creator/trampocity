@@ -45,6 +45,11 @@ export default function AdminScreen() {
   const [notifOuverte, setNotifOuverte] = useState<string | null>(null);
   const [notifTexte, setNotifTexte] = useState('');
   const [stats, setStats] = useState<Stats | null>(null);
+  const [scanModal, setScanModal] = useState(false);
+  const [scanId, setScanId] = useState('');
+  const [scanClient, setScanClient] = useState<Client | null>(null);
+  const [scanLoading, setScanLoading] = useState(false);
+  const [scanErreur, setScanErreur] = useState<string | null>(null);
 
   useEffect(() => {
     verifierAdmin();
@@ -239,6 +244,55 @@ export default function AdminScreen() {
     setNotifTexte('');
   }
 
+  async function rechercherClientScan() {
+    const id = scanId.trim();
+    if (!id) return;
+    setScanErreur(null);
+    setScanLoading(true);
+    const { data, error } = await supabase.from('clients').select('*').eq('id', id).single();
+    setScanLoading(false);
+    if (error || !data) {
+      setScanErreur('Aucun client trouvé. Vérifiez l\'ID affiché sous le QR code.');
+      return;
+    }
+    setScanClient(data as Client);
+  }
+
+  async function validerSessionScan(montant: number) {
+    if (!scanClient) return;
+    const nouveauxPoints = scanClient.points + montant;
+
+    const [sessionRes, updateRes] = await Promise.all([
+      supabase.from('sessions').insert({
+        client_id: scanClient.id,
+        points_gagnes: montant,
+        description: `Main court ${montant === 150 ? '1h' : '2h'}`,
+      }),
+      supabase.from('clients').update({
+        points: nouveauxPoints,
+        niveau: calculerNiveau(nouveauxPoints),
+      }).eq('id', scanClient.id),
+    ]);
+
+    if (sessionRes.error || updateRes.error) {
+      alerter('Erreur', "La session n'a pas pu être enregistrée.");
+      return;
+    }
+
+    await envoyerNotification(
+      scanClient.id,
+      'TRAMPO CITY 🤸',
+      `Vous avez gagné ${montant} points ! Solde : ${nouveauxPoints.toLocaleString('fr-FR')} points 🤸`,
+    );
+
+    alerter('✅ Session validée !', `${scanClient.nom} a reçu +${montant} pts\nTotal : ${nouveauxPoints.toLocaleString('fr-FR')} pts`);
+    setScanModal(false);
+    setScanClient(null);
+    setScanId('');
+    setScanErreur(null);
+    chargerClients();
+  }
+
   async function relancerClient(client: Client) {
     const prenom = client.nom.split(' ')[0];
     await envoyerNotification(
@@ -358,8 +412,8 @@ export default function AdminScreen() {
         </TouchableOpacity>
         <Text style={styles.title}>Dashboard Admin 📊</Text>
         <Text style={styles.sub}>TRAMPO CITY — Gestion clients</Text>
-        <TouchableOpacity style={styles.scanBtn} onPress={() => router.push('/scanner')} activeOpacity={0.8}>
-          <Text style={styles.scanBtnText}>📷 Scanner un QR code</Text>
+        <TouchableOpacity style={styles.scanBtn} onPress={() => { setScanModal(true); setScanClient(null); setScanId(''); setScanErreur(null); }} activeOpacity={0.8}>
+          <Text style={styles.scanBtnText}>📋 Scanner un QR code</Text>
         </TouchableOpacity>
       </View>
 
@@ -485,6 +539,86 @@ export default function AdminScreen() {
           )}
         </ScrollView>
       )}
+
+      {/* Modal scan QR */}
+      {scanModal && (
+        <View style={styles.scanOverlay}>
+          <View style={styles.scanModalCard}>
+            {scanClient ? (
+              <>
+                <View style={styles.scanClientHeader}>
+                  <View style={styles.scanAvatar}>
+                    <Text style={styles.scanAvatarText}>{initiales(scanClient.nom)}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.scanClientNom}>{scanClient.nom}</Text>
+                    <Text style={styles.scanClientEmail}>{scanClient.email}</Text>
+                  </View>
+                  <View style={styles.scanPtsWrap}>
+                    <Text style={styles.scanPtsVal}>{scanClient.points.toLocaleString('fr-FR')}</Text>
+                    <Text style={styles.scanPtsLbl}>pts</Text>
+                  </View>
+                </View>
+
+                <Text style={styles.scanQuestion}>Quelle session valider ?</Text>
+
+                <TouchableOpacity style={styles.scanActionBtn} onPress={() => validerSessionScan(150)} activeOpacity={0.8}>
+                  <Text style={styles.scanActionBtnText}>🤸 +150 pts — Session 1h</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.scanActionBtn} onPress={() => validerSessionScan(300)} activeOpacity={0.8}>
+                  <Text style={styles.scanActionBtnText}>🤸 +300 pts — Session 2h</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.scanAnnulerBtn} onPress={() => setScanClient(null)} activeOpacity={0.8}>
+                  <Text style={styles.scanAnnulerText}>← Rechercher un autre client</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <Text style={styles.scanModalTitle}>Valider une session</Text>
+                <Text style={styles.scanModalDesc}>
+                  Demandez au client d'ouvrir son profil dans l'app.{'\n'}
+                  Copiez l'ID affiché sous son QR code.
+                </Text>
+
+                <Text style={styles.scanModalLabel}>ID client (UUID complet)</Text>
+                <TextInput
+                  style={styles.scanInput}
+                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                  value={scanId}
+                  onChangeText={(v) => { setScanId(v); setScanErreur(null); }}
+                  placeholderTextColor="#bbb"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  onSubmitEditing={rechercherClientScan}
+                  autoFocus
+                />
+
+                {scanErreur && (
+                  <View style={styles.scanErreurBox}>
+                    <Text style={styles.scanErreurText}>⚠️  {scanErreur}</Text>
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={[styles.scanActionBtn, (!scanId.trim() || scanLoading) && styles.scanActionBtnDisabled]}
+                  onPress={rechercherClientScan}
+                  disabled={!scanId.trim() || scanLoading}
+                  activeOpacity={0.8}>
+                  {scanLoading
+                    ? <ActivityIndicator color="#fff" />
+                    : <Text style={styles.scanActionBtnText}>Rechercher ce client →</Text>
+                  }
+                </TouchableOpacity>
+              </>
+            )}
+
+            <TouchableOpacity style={styles.scanFermerBtn} onPress={() => setScanModal(false)} activeOpacity={0.8}>
+              <Text style={styles.scanFermerText}>Fermer</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -597,4 +731,44 @@ const styles = StyleSheet.create({
   topMedal: { fontSize: 18 },
   topNom: { flex: 1, fontSize: 13, color: '#1a1a1a', fontWeight: '500' },
   topCount: { fontSize: 12, color: '#888' },
+  // Modal scan
+  scanOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 20,
+  },
+  scanModalCard: {
+    backgroundColor: '#fff', borderRadius: 16, padding: 20,
+    width: '100%', maxWidth: 480, gap: 10,
+  },
+  scanModalTitle: { fontSize: 17, fontWeight: '600', color: '#1a1a1a' },
+  scanModalDesc: { fontSize: 13, color: '#666', lineHeight: 19 },
+  scanModalLabel: { fontSize: 12, fontWeight: '500', color: '#888', textTransform: 'uppercase', letterSpacing: 0.4 },
+  scanInput: {
+    backgroundColor: '#f7f7f5', borderRadius: 10, borderWidth: 0.5,
+    borderColor: '#ddd', padding: 12, fontSize: 13, color: '#1a1a1a',
+  },
+  scanErreurBox: { backgroundColor: '#fff5f5', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: '#fcc' },
+  scanErreurText: { color: '#c0392b', fontSize: 12 },
+  scanClientHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
+  scanAvatar: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: '#FDEAEA', alignItems: 'center', justifyContent: 'center',
+  },
+  scanAvatarText: { fontSize: 15, fontWeight: '500', color: '#E31E24' },
+  scanClientNom: { fontSize: 14, fontWeight: '500', color: '#1a1a1a' },
+  scanClientEmail: { fontSize: 11, color: '#888', marginTop: 1 },
+  scanPtsWrap: { alignItems: 'center' },
+  scanPtsVal: { fontSize: 20, fontWeight: '500', color: '#1a1a1a' },
+  scanPtsLbl: { fontSize: 10, color: '#888' },
+  scanQuestion: { fontSize: 13, color: '#888', textAlign: 'center', marginVertical: 4 },
+  scanActionBtn: { backgroundColor: '#E31E24', borderRadius: 12, padding: 14, alignItems: 'center' },
+  scanActionBtnDisabled: { opacity: 0.45 },
+  scanActionBtnText: { color: '#fff', fontSize: 14, fontWeight: '500' },
+  scanAnnulerBtn: { alignItems: 'center', paddingVertical: 6 },
+  scanAnnulerText: { color: '#888', fontSize: 13 },
+  scanFermerBtn: {
+    marginTop: 4, borderRadius: 12, padding: 12, alignItems: 'center',
+    borderWidth: 0.5, borderColor: '#ddd',
+  },
+  scanFermerText: { color: '#888', fontSize: 14 },
 });
