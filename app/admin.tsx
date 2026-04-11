@@ -39,25 +39,20 @@ interface Demande {
   client_points?: number;
 }
 
-interface Stats {
-  sessionsSemaine: { jour: string; count: number }[];
-  pointsAujourdhui: number;
-  nouveauxMois: number;
-  top3: { nom: string; sessions: number }[];
-}
-
 export default function AdminScreen() {
   const [clients, setClients] = useState<Client[]>([]);
   const [clientsFiltres, setClientsFiltres] = useState<Client[]>([]);
-  const [clientsInactifs, setClientsInactifs] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [recherche, setRecherche] = useState('');
-  const [onglet, setOnglet] = useState<'tous' | 'inactifs' | 'stats' | 'recompenses'>('tous');
+  const [onglet, setOnglet] = useState<'tous' | 'recompenses'>('tous');
   const [demandes, setDemandes] = useState<Demande[]>([]);
   const [demandesLoading, setDemandesLoading] = useState(false);
   const [notifOuverte, setNotifOuverte] = useState<string | null>(null);
   const [notifTexte, setNotifTexte] = useState('');
-  const [stats, setStats] = useState<Stats | null>(null);
+  const [notifTousModal, setNotifTousModal] = useState(false);
+  const [notifTousTitre, setNotifTousTitre] = useState('');
+  const [notifTousMessage, setNotifTousMessage] = useState('');
+  const [notifTousEnvoi, setNotifTousEnvoi] = useState(false);
   const [scanModal, setScanModal] = useState(false);
   const [scanId, setScanId] = useState('');
   const [scanClient, setScanClient] = useState<Client | null>(null);
@@ -107,101 +102,17 @@ export default function AdminScreen() {
   }
 
   async function chargerClients() {
-    const [clientsRes, sessionsRes] = await Promise.all([
-      supabase.from('clients').select('*').order('points', { ascending: false }),
-      supabase.from('sessions').select('client_id, created_at'),
-    ]);
+    const { data, error } = await supabase
+      .from('clients').select('*').order('points', { ascending: false });
 
-    if (clientsRes.error) {
+    if (error) {
       alerter('Erreur', 'Impossible de charger les clients.');
       setLoading(false);
       return;
     }
 
-    const allClients = (clientsRes.data || []) as Client[];
-    setClients(allClients);
-
-    const sessions = sessionsRes.data || [];
-    const deuxSemainesAvant = new Date();
-    deuxSemainesAvant.setDate(deuxSemainesAvant.getDate() - 14);
-
-    const derniereSession: Record<string, Date> = {};
-    sessions.forEach(s => {
-      const d = new Date(s.created_at);
-      if (!derniereSession[s.client_id] || d > derniereSession[s.client_id]) {
-        derniereSession[s.client_id] = d;
-      }
-    });
-
-    const inactifs = allClients.filter(c => {
-      const derniere = derniereSession[c.id];
-      return !derniere || derniere < deuxSemainesAvant;
-    });
-    setClientsInactifs(inactifs);
-
-    await chargerStats();
+    setClients((data || []) as Client[]);
     setLoading(false);
-  }
-
-  async function chargerStats() {
-    const maintenant = new Date();
-    const debutSemaine = new Date(maintenant);
-    debutSemaine.setDate(maintenant.getDate() - 6);
-    debutSemaine.setHours(0, 0, 0, 0);
-
-    const debutJour = new Date(maintenant);
-    debutJour.setHours(0, 0, 0, 0);
-
-    const debutMois = new Date(maintenant.getFullYear(), maintenant.getMonth(), 1);
-
-    const [sessionsRes, clientsRes] = await Promise.all([
-      supabase.from('sessions').select('client_id, points_gagnes, created_at').gte('created_at', debutSemaine.toISOString()),
-      supabase.from('clients').select('id, nom, created_at'),
-    ]);
-
-    const sessions = sessionsRes.data || [];
-    const allClients = clientsRes.data || [];
-
-    // Sessions par jour sur 7 jours
-    const JOURS = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
-    const countParJour: Record<string, number> = {};
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(maintenant);
-      d.setDate(maintenant.getDate() - i);
-      const key = d.toISOString().slice(0, 10);
-      countParJour[key] = 0;
-    }
-    sessions.forEach(s => {
-      const key = s.created_at.slice(0, 10);
-      if (key in countParJour) countParJour[key]++;
-    });
-    const sessionsSemaine = Object.entries(countParJour).map(([date, count]) => ({
-      jour: JOURS[new Date(date + 'T12:00:00').getDay()],
-      count,
-    }));
-
-    // Points distribués aujourd'hui
-    const pointsAujourdhui = sessions
-      .filter(s => s.created_at >= debutJour.toISOString())
-      .reduce((acc, s) => acc + (s.points_gagnes || 0), 0);
-
-    // Nouveaux clients ce mois
-    const nouveauxMois = allClients.filter(c => c.created_at >= debutMois.toISOString()).length;
-
-    // Top 3 clients les plus actifs (sessions semaine)
-    const sessionsParClient: Record<string, number> = {};
-    sessions.forEach(s => {
-      sessionsParClient[s.client_id] = (sessionsParClient[s.client_id] || 0) + 1;
-    });
-    const top3 = Object.entries(sessionsParClient)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3)
-      .map(([id, count]) => ({
-        nom: allClients.find(c => c.id === id)?.nom ?? id.slice(0, 8),
-        sessions: count,
-      }));
-
-    setStats({ sessionsSemaine, pointsAujourdhui, nouveauxMois, top3 });
   }
 
   function ajouterPoints(client: Client, montant: number) {
@@ -476,14 +387,30 @@ export default function AdminScreen() {
     );
   }
 
-  async function relancerClient(client: Client) {
-    const prenom = client.nom.split(' ')[0];
-    await envoyerNotification(
-      client.id,
-      'TRAMPO CITY vous manque ! 🤸',
-      `Salut ${prenom} ! Ça fait un moment qu'on ne vous a pas vu. Revenez sauter, ${client.points.toLocaleString('fr-FR')} pts vous attendent ! 🎉`,
-    );
-    alerter('✅ Envoyé', `Notification de relance envoyée à ${client.nom}`);
+  async function envoyerNotifTous() {
+    const titre = notifTousTitre.trim();
+    const message = notifTousMessage.trim();
+    if (!titre || !message) return;
+    setNotifTousEnvoi(true);
+    try {
+      const res = await fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ broadcast: true, titre, message }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alerter('Erreur', err.error || "L'envoi a échoué. Réessayez.");
+      } else {
+        alerter('✅ Envoyé', `Notification envoyée à tous les abonnés.`);
+        setNotifTousModal(false);
+        setNotifTousTitre('');
+        setNotifTousMessage('');
+      }
+    } catch {
+      alerter('Erreur', 'Erreur réseau. Vérifiez votre connexion.');
+    }
+    setNotifTousEnvoi(false);
   }
 
   const totalClients = clients.length;
@@ -498,7 +425,7 @@ export default function AdminScreen() {
     );
   }
 
-  function renderClientCard(c: Client, index: number, isInactif = false) {
+  function renderClientCard(c: Client, index: number) {
     const notifOuvte = notifOuverte === c.id;
 
     return (
@@ -517,71 +444,53 @@ export default function AdminScreen() {
           </View>
         </View>
 
-        {isInactif ? (
-          <TouchableOpacity
-            style={styles.relanceBtn}
-            onPress={() => relancerClient(c)}
-            activeOpacity={0.8}>
-            <Text style={styles.relanceBtnText}>🔔 Envoyer une relance</Text>
+        <View style={styles.clientActions}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => ajouterPoints(c, 150)} activeOpacity={0.8}>
+            <Text style={styles.actionBtnText}>+150 pts (1h)</Text>
           </TouchableOpacity>
-        ) : (
-          <>
-            <View style={styles.clientActions}>
-              <TouchableOpacity style={styles.actionBtn} onPress={() => ajouterPoints(c, 150)} activeOpacity={0.8}>
-                <Text style={styles.actionBtnText}>+150 pts (1h)</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionBtn} onPress={() => ajouterPoints(c, 300)} activeOpacity={0.8}>
-                <Text style={styles.actionBtnText}>+300 pts (2h)</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.actionBtn, styles.actionBtnRed]} onPress={() => retirerPoints(c)} activeOpacity={0.8}>
-                <Text style={styles.actionBtnRedText}>-200 pts</Text>
-              </TouchableOpacity>
-            </View>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => ajouterPoints(c, 300)} activeOpacity={0.8}>
+            <Text style={styles.actionBtnText}>+300 pts (2h)</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionBtn, styles.actionBtnRed]} onPress={() => retirerPoints(c)} activeOpacity={0.8}>
+            <Text style={styles.actionBtnRedText}>-200 pts</Text>
+          </TouchableOpacity>
+        </View>
 
+        <TouchableOpacity
+          style={[styles.notifBtn, notifOuvte && styles.notifBtnActif]}
+          onPress={() => {
+            if (notifOuvte) { setNotifOuverte(null); setNotifTexte(''); }
+            else { setNotifOuverte(c.id); setNotifTexte(''); }
+          }}
+          activeOpacity={0.8}>
+          <Text style={[styles.notifBtnText, notifOuvte && styles.notifBtnTextActif]}>
+            {notifOuvte ? '✕ Annuler' : '🔔 Envoyer une notification'}
+          </Text>
+        </TouchableOpacity>
+
+        {notifOuvte && (
+          <View style={styles.notifForm}>
+            <TextInput
+              style={styles.notifInput}
+              placeholder="Votre message personnalisé..."
+              value={notifTexte}
+              onChangeText={setNotifTexte}
+              placeholderTextColor="#888"
+              multiline
+              autoFocus
+            />
             <TouchableOpacity
-              style={[styles.notifBtn, notifOuvte && styles.notifBtnActif]}
-              onPress={() => {
-                if (notifOuvte) {
-                  setNotifOuverte(null);
-                  setNotifTexte('');
-                } else {
-                  setNotifOuverte(c.id);
-                  setNotifTexte('');
-                }
-              }}
+              style={[styles.notifSendBtn, !notifTexte.trim() && styles.notifSendBtnDisabled]}
+              onPress={() => envoyerNotifPerso(c)}
+              disabled={!notifTexte.trim()}
               activeOpacity={0.8}>
-              <Text style={[styles.notifBtnText, notifOuvte && styles.notifBtnTextActif]}>
-                {notifOuvte ? '✕ Annuler' : '🔔 Envoyer une notification'}
-              </Text>
+              <Text style={styles.notifSendBtnText}>Envoyer →</Text>
             </TouchableOpacity>
-
-            {notifOuvte && (
-              <View style={styles.notifForm}>
-                <TextInput
-                  style={styles.notifInput}
-                  placeholder="Votre message personnalisé..."
-                  value={notifTexte}
-                  onChangeText={setNotifTexte}
-                  placeholderTextColor="#888"
-                  multiline
-                  autoFocus
-                />
-                <TouchableOpacity
-                  style={[styles.notifSendBtn, !notifTexte.trim() && styles.notifSendBtnDisabled]}
-                  onPress={() => envoyerNotifPerso(c)}
-                  disabled={!notifTexte.trim()}
-                  activeOpacity={0.8}>
-                  <Text style={styles.notifSendBtnText}>Envoyer →</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </>
+          </View>
         )}
       </View>
     );
   }
-
-  const listeAffichee = onglet === 'tous' ? clientsFiltres : clientsInactifs;
 
   return (
     <View style={styles.container}>
@@ -591,9 +500,14 @@ export default function AdminScreen() {
         </TouchableOpacity>
         <Text style={styles.title}>Dashboard Admin 📊</Text>
         <Text style={styles.sub}>TRAMPO CITY — Gestion clients</Text>
-        <TouchableOpacity style={styles.scanBtn} onPress={() => { setScanModal(true); setScanClient(null); setScanId(''); setScanErreur(null); }} activeOpacity={0.8}>
-          <Text style={styles.scanBtnText}>📋 Scanner un QR code</Text>
-        </TouchableOpacity>
+        <View style={styles.headerBtns}>
+          <TouchableOpacity style={styles.headerBtn} onPress={() => { setScanModal(true); setScanClient(null); setScanId(''); setScanErreur(null); }} activeOpacity={0.8}>
+            <Text style={styles.headerBtnText}>📋 Scanner un QR code</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerBtn} onPress={() => setNotifTousModal(true)} activeOpacity={0.8}>
+            <Text style={styles.headerBtnText}>📣 Notifier tous</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.statsRow}>
@@ -617,23 +531,7 @@ export default function AdminScreen() {
           onPress={() => setOnglet('tous')}
           activeOpacity={0.8}>
           <Text style={[styles.ongletText, onglet === 'tous' && styles.ongletTextActif]}>
-            Tous ({clients.length})
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.onglet, onglet === 'inactifs' && styles.ongletActif]}
-          onPress={() => setOnglet('inactifs')}
-          activeOpacity={0.8}>
-          <Text style={[styles.ongletText, onglet === 'inactifs' && styles.ongletTextActif]}>
-            Inactifs ({clientsInactifs.length})
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.onglet, onglet === 'stats' && styles.ongletActif]}
-          onPress={() => setOnglet('stats')}
-          activeOpacity={0.8}>
-          <Text style={[styles.ongletText, onglet === 'stats' && styles.ongletTextActif]}>
-            Stats 📈
+            Clients ({clients.length})
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -641,7 +539,7 @@ export default function AdminScreen() {
           onPress={() => setOnglet('recompenses')}
           activeOpacity={0.8}>
           <Text style={[styles.ongletText, onglet === 'recompenses' && styles.ongletTextActif]}>
-            🎁{demandes.length > 0 ? ` (${demandes.length})` : ''}
+            🎁 Récompenses{demandes.length > 0 ? ` (${demandes.length})` : ''}
           </Text>
         </TouchableOpacity>
       </View>
@@ -700,71 +598,57 @@ export default function AdminScreen() {
             ))
           )}
         </ScrollView>
-      ) : onglet === 'stats' ? (
-        <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
-          {stats ? (
-            <>
-              {/* Points aujourd'hui + nouveaux clients */}
-              <View style={styles.statsGrid}>
-                <View style={styles.statsGridCard}>
-                  <Text style={styles.statsGridVal}>{stats.pointsAujourdhui.toLocaleString('fr-FR')}</Text>
-                  <Text style={styles.statsGridLbl}>Points distribués{'\n'}aujourd'hui</Text>
-                </View>
-                <View style={styles.statsGridCard}>
-                  <Text style={styles.statsGridVal}>{stats.nouveauxMois}</Text>
-                  <Text style={styles.statsGridLbl}>Nouveaux clients{'\n'}ce mois</Text>
-                </View>
-              </View>
-
-              {/* Sessions par jour */}
-              <View style={styles.statsCard}>
-                <Text style={styles.statsCardTitle}>Sessions — 7 derniers jours</Text>
-                <View style={styles.barChart}>
-                  {stats.sessionsSemaine.map(({ jour, count }) => {
-                    const max = Math.max(...stats.sessionsSemaine.map(s => s.count), 1);
-                    const h = Math.max((count / max) * 80, count > 0 ? 6 : 2);
-                    return (
-                      <View key={jour} style={styles.barCol}>
-                        <Text style={styles.barCount}>{count > 0 ? count : ''}</Text>
-                        <View style={[styles.bar, { height: h }]} />
-                        <Text style={styles.barLabel}>{jour}</Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-
-              {/* Top 3 */}
-              <View style={styles.statsCard}>
-                <Text style={styles.statsCardTitle}>Top 3 — cette semaine</Text>
-                {stats.top3.length === 0
-                  ? <Text style={styles.statsEmpty}>Aucune session cette semaine</Text>
-                  : stats.top3.map((c, i) => (
-                      <View key={c.nom} style={styles.topRow}>
-                        <Text style={styles.topMedal}>{['🥇', '🥈', '🥉'][i]}</Text>
-                        <Text style={styles.topNom}>{c.nom}</Text>
-                        <Text style={styles.topCount}>{c.sessions} session{c.sessions > 1 ? 's' : ''}</Text>
-                      </View>
-                    ))
-                }
-              </View>
-            </>
-          ) : (
-            <ActivityIndicator color="#E31E24" style={{ marginTop: 40 }} />
-          )}
-        </ScrollView>
       ) : (
         <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
-          {listeAffichee.length === 0 ? (
+          {clientsFiltres.length === 0 ? (
             <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>
-                {onglet === 'inactifs' ? 'Aucun client inactif 🎉' : 'Aucun client trouvé'}
-              </Text>
+              <Text style={styles.emptyText}>Aucun client trouvé</Text>
             </View>
           ) : (
-            listeAffichee.map((c, index) => renderClientCard(c, index, onglet === 'inactifs'))
+            clientsFiltres.map((c, index) => renderClientCard(c, index))
           )}
         </ScrollView>
+      )}
+
+      {/* Modal notification à tous */}
+      {notifTousModal && (
+        <View style={styles.scanOverlay}>
+          <View style={styles.scanModalCard}>
+            <Text style={styles.scanModalTitle}>📣 Notification à tous</Text>
+            <Text style={styles.scanModalDesc}>
+              Envoie un message push à tous les abonnés de l'application.
+            </Text>
+            <TextInput
+              style={styles.scanInput}
+              placeholder="Titre (ex: Offre spéciale 🎉)"
+              value={notifTousTitre}
+              onChangeText={setNotifTousTitre}
+              placeholderTextColor="#bbb"
+              autoCorrect={false}
+            />
+            <TextInput
+              style={[styles.scanInput, { minHeight: 80 }]}
+              placeholder="Message..."
+              value={notifTousMessage}
+              onChangeText={setNotifTousMessage}
+              placeholderTextColor="#bbb"
+              multiline
+            />
+            <TouchableOpacity
+              style={[styles.scanActionBtn, (!notifTousTitre.trim() || !notifTousMessage.trim() || notifTousEnvoi) && styles.scanActionBtnDisabled]}
+              onPress={envoyerNotifTous}
+              disabled={!notifTousTitre.trim() || !notifTousMessage.trim() || notifTousEnvoi}
+              activeOpacity={0.8}>
+              {notifTousEnvoi
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.scanActionBtnText}>Envoyer à tous →</Text>
+              }
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.scanFermerBtn} onPress={() => { setNotifTousModal(false); setNotifTousTitre(''); setNotifTousMessage(''); }} activeOpacity={0.8}>
+              <Text style={styles.scanFermerText}>Annuler</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       )}
 
       {/* Modal scan QR */}
@@ -911,11 +795,12 @@ const styles = StyleSheet.create({
   backText: { color: '#fff', opacity: 0.8, fontSize: 14 },
   title: { color: '#fff', fontSize: 22, fontWeight: '500' },
   sub: { color: '#fff', fontSize: 13, opacity: 0.8, marginTop: 4 },
-  scanBtn: {
-    backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 10,
-    padding: 10, marginTop: 12, alignItems: 'center',
+  headerBtns: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  headerBtn: {
+    flex: 1, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 10,
+    padding: 10, alignItems: 'center',
   },
-  scanBtnText: { color: '#fff', fontSize: 14, fontWeight: '500' },
+  headerBtnText: { color: '#fff', fontSize: 13, fontWeight: '500' },
   statsRow: { flexDirection: 'row', gap: 10, padding: 16, paddingBottom: 0 },
   statCard: {
     flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: 12,
@@ -983,34 +868,6 @@ const styles = StyleSheet.create({
   },
   notifSendBtnDisabled: { opacity: 0.4 },
   notifSendBtnText: { color: '#fff', fontSize: 13, fontWeight: '500' },
-  relanceBtn: {
-    backgroundColor: '#FFF3E0', borderRadius: 10, padding: 10,
-    alignItems: 'center', borderWidth: 0.5, borderColor: '#FFB74D',
-  },
-  relanceBtnText: { color: '#E65100', fontSize: 12, fontWeight: '500' },
-  // Stats
-  statsGrid: { flexDirection: 'row', gap: 10, marginBottom: 10 },
-  statsGridCard: {
-    flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: 14,
-    alignItems: 'center', borderWidth: 0.5, borderColor: '#ddd',
-  },
-  statsGridVal: { fontSize: 26, fontWeight: '700', color: '#E31E24' },
-  statsGridLbl: { fontSize: 11, color: '#888', marginTop: 4, textAlign: 'center', lineHeight: 16 },
-  statsCard: {
-    backgroundColor: '#fff', borderRadius: 14, borderWidth: 0.5,
-    borderColor: '#ddd', padding: 14, marginBottom: 10,
-  },
-  statsCardTitle: { fontSize: 12, fontWeight: '600', color: '#888', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 14 },
-  statsEmpty: { color: '#bbb', fontSize: 13, textAlign: 'center', paddingVertical: 8 },
-  barChart: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', height: 100 },
-  barCol: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
-  barCount: { fontSize: 10, color: '#E31E24', fontWeight: '600' },
-  bar: { width: '60%', backgroundColor: '#E31E24', borderRadius: 4 },
-  barLabel: { fontSize: 10, color: '#888', marginTop: 2 },
-  topRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 0.5, borderBottomColor: '#f0f0f0', gap: 10 },
-  topMedal: { fontSize: 18 },
-  topNom: { flex: 1, fontSize: 13, color: '#1a1a1a', fontWeight: '500' },
-  topCount: { fontSize: 12, color: '#888' },
   // Modal scan
   scanOverlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,

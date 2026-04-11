@@ -22,27 +22,38 @@ export default async function handler(req: Request): Promise<Response> {
     return json({ error: 'Configuration serveur manquante' }, 500);
   }
 
-  let body: { userId?: string; titre?: string; message?: string };
+  let body: { userId?: string; broadcast?: boolean; titre?: string; message?: string };
   try {
     body = await req.json();
   } catch {
     return json({ error: 'Body JSON invalide' }, 400);
   }
 
-  const { userId, titre, message } = body;
-  if (!userId || !titre || !message) {
-    return json({ error: 'userId, titre et message sont requis' }, 400);
+  const { userId, broadcast, titre, message } = body;
+  if (!titre || !message) {
+    return json({ error: 'titre et message sont requis' }, 400);
+  }
+  if (!broadcast && !userId) {
+    return json({ error: 'userId requis (ou broadcast:true pour tous)' }, 400);
   }
 
-  const payload = {
-    app_id: ONESIGNAL_APP_ID,
-    target_channel: 'push',
-    include_external_user_ids: [userId],
-    headings: { fr: titre, en: titre },
-    contents: { fr: message, en: message },
-  };
+  const payload = broadcast
+    ? {
+        app_id: ONESIGNAL_APP_ID,
+        target_channel: 'push',
+        included_segments: ['Subscribed Users'],
+        headings: { fr: titre, en: titre },
+        contents: { fr: message, en: message },
+      }
+    : {
+        app_id: ONESIGNAL_APP_ID,
+        target_channel: 'push',
+        include_external_user_ids: [userId],
+        headings: { fr: titre, en: titre },
+        contents: { fr: message, en: message },
+      };
 
-  console.log('[notify] envoi →', userId, '|', titre);
+  console.log('[notify]', broadcast ? 'broadcast →' : 'envoi →', broadcast ? 'tous' : userId, '|', titre);
 
   let osRes: Response;
   try {
