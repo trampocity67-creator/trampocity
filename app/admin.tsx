@@ -1,3 +1,4 @@
+import jsQR from 'jsqr';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -52,6 +53,7 @@ export default function AdminScreen() {
   const [scanErreur, setScanErreur] = useState<string | null>(null);
   const [scanMode, setScanMode] = useState<'saisie' | 'camera'>('saisie');
   const videoRef = useRef<any>(null);
+  const canvasRef = useRef<any>(null);
   const streamRef = useRef<any>(null);
   const animRef = useRef<number | null>(null);
 
@@ -285,51 +287,60 @@ export default function AdminScreen() {
       arreterCamera();
       return;
     }
-    if (Platform.OS !== 'web' || typeof window === 'undefined' || !('BarcodeDetector' in window)) return;
+    if (Platform.OS !== 'web') return;
 
     let stopped = false;
 
     async function demarrerCamera() {
-      // Attendre que l'élément <video> soit monté dans le DOM
+      // Attendre que les éléments <video> et <canvas> soient montés dans le DOM
       let attempts = 0;
-      while (!videoRef.current && attempts < 20) {
+      while ((!videoRef.current || !canvasRef.current) && attempts < 20) {
         await new Promise(r => setTimeout(r, 50));
         attempts++;
       }
-      if (stopped || !videoRef.current) return;
+      if (stopped || !videoRef.current || !canvasRef.current) return;
 
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
         if (stopped) { stream.getTracks().forEach((t: MediaStreamTrack) => t.stop()); return; }
         streamRef.current = stream;
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        await videoRef.current.play();
 
-        const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
-        const scan = async () => {
+        const canvas: HTMLCanvasElement = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const scan = () => {
           if (stopped || !videoRef.current) return;
-          try {
-            const codes = await detector.detect(videoRef.current);
-            if (codes.length > 0) {
+          const video = videoRef.current;
+          if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height);
+            if (code?.data) {
               arreterCamera();
               setScanMode('saisie');
               setScanLoading(true);
-              const { data, error } = await supabase
-                .from('clients').select('*').eq('id', codes[0].rawValue).single();
-              setScanLoading(false);
-              if (error || !data) {
-                setScanErreur("QR code non reconnu. Vérifiez que le client a bien l'app Trampo City.");
-              } else {
-                setScanClient(data as Client);
-              }
+              supabase.from('clients').select('*').eq('id', code.data).single()
+                .then(({ data, error }) => {
+                  setScanLoading(false);
+                  if (error || !data) {
+                    setScanErreur("QR code non reconnu. Vérifiez que le client utilise bien l'app Trampo City.");
+                  } else {
+                    setScanClient(data as Client);
+                  }
+                });
               return;
             }
-          } catch {}
+          }
           animRef.current = requestAnimationFrame(scan);
         };
         animRef.current = requestAnimationFrame(scan);
       } catch {
-        setScanErreur("Impossible d'accéder à la caméra. Vérifiez les permissions.");
+        setScanErreur("Impossible d'accéder à la caméra. Vérifiez les permissions du navigateur.");
         setScanMode('saisie');
       }
     }
@@ -711,7 +722,7 @@ export default function AdminScreen() {
                   </>
                 ) : (
                   <>
-                    {Platform.OS === 'web' && typeof window !== 'undefined' && 'BarcodeDetector' in window ? (
+                    {Platform.OS === 'web' ? (
                       <View style={styles.scanVideoWrap}>
                         {/* @ts-ignore */}
                         <video
@@ -720,6 +731,8 @@ export default function AdminScreen() {
                           playsInline
                           muted
                         />
+                        {/* @ts-ignore — canvas caché, utilisé pour jsQR */}
+                        <canvas ref={canvasRef} style={{ display: 'none' } as any} />
                         {scanLoading && (
                           <View style={styles.scanVideoOverlay}>
                             <ActivityIndicator color="#fff" size="large" />
@@ -730,8 +743,7 @@ export default function AdminScreen() {
                     ) : (
                       <View style={styles.scanCameraUnsupported}>
                         <Text style={styles.scanCameraUnsupportedText}>
-                          ⚠️  BarcodeDetector n'est pas supporté sur ce navigateur.{'\n'}
-                          Utilisez Chrome ou Edge, ou passez en mode Douchette / Clavier.
+                          ⚠️  La caméra n'est disponible que sur le web.
                         </Text>
                       </View>
                     )}
