@@ -393,6 +393,34 @@ export default function AdminScreen() {
     if (onglet === 'recompenses') chargerDemandes();
   }
 
+  function supprimerClient(c: Client) {
+    confirmer(
+      '🗑️ Supprimer le client',
+      `Supprimer définitivement ${c.nom} et toutes ses données ? Cette action est irréversible.`,
+      async () => {
+        // Suppression dans l'ordre pour respecter les FK
+        await supabase.from('notifications').delete().eq('client_id', c.id);
+        await supabase.from('recompenses_utilisees').delete().eq('client_id', c.id);
+        await supabase.from('sessions').delete().eq('client_id', c.id);
+        await supabase.from('clients').delete().eq('id', c.id);
+
+        // Suppression du compte auth via l'Edge Function (lookup par email côté serveur)
+        try {
+          await fetch('/api/delete-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: c.email }),
+          });
+        } catch (e) {
+          console.warn('[admin] suppression compte auth échouée (ignorée):', e);
+        }
+
+        alerter('✅ Supprimé', `${c.nom} a été supprimé.`);
+        chargerClients();
+      }
+    );
+  }
+
   async function envoyerNotifTous() {
     const titre = notifTousTitre.trim();
     const message = notifTousMessage.trim();
@@ -462,17 +490,26 @@ export default function AdminScreen() {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity
-          style={[styles.notifBtn, notifOuvte && styles.notifBtnActif]}
-          onPress={() => {
-            if (notifOuvte) { setNotifOuverte(null); setNotifTexte(''); }
-            else { setNotifOuverte(c.id); setNotifTexte(''); }
-          }}
-          activeOpacity={0.8}>
-          <Text style={[styles.notifBtnText, notifOuvte && styles.notifBtnTextActif]}>
-            {notifOuvte ? '✕ Annuler' : '🔔 Envoyer une notification'}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.clientBottomRow}>
+          <TouchableOpacity
+            style={[styles.notifBtn, notifOuvte && styles.notifBtnActif, { flex: 1 }]}
+            onPress={() => {
+              if (notifOuvte) { setNotifOuverte(null); setNotifTexte(''); }
+              else { setNotifOuverte(c.id); setNotifTexte(''); }
+            }}
+            activeOpacity={0.8}>
+            <Text style={[styles.notifBtnText, notifOuvte && styles.notifBtnTextActif]}>
+              {notifOuvte ? '✕ Annuler' : '🔔 Notifier'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.deleteBtn}
+            onPress={() => supprimerClient(c)}
+            activeOpacity={0.8}>
+            <Text style={styles.deleteBtnText}>🗑️</Text>
+          </TouchableOpacity>
+        </View>
 
         {notifOuvte && (
           <View style={styles.notifForm}>
@@ -959,4 +996,10 @@ const styles = StyleSheet.create({
   demandeRefuserText: { color: '#888', fontSize: 13 },
   refreshBtn: { position: 'absolute', top: 16, right: 16, padding: 8 },
   refreshIcon: { fontSize: 16, opacity: 0.8 },
+  clientBottomRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  deleteBtn: {
+    borderRadius: 10, padding: 8, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: '#f5c6c4', backgroundColor: '#fff5f5',
+  },
+  deleteBtnText: { fontSize: 16 },
 });
