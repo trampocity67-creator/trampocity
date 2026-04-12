@@ -38,21 +38,45 @@ export default async function handler(req: Request): Promise<Response> {
     return json({ error: 'userId requis (ou broadcast:true pour tous)' }, 400);
   }
 
-  const payload = broadcast
-    ? {
-        app_id: ONESIGNAL_APP_ID,
-        target_channel: 'push',
-        included_segments: ['All'],
-        headings: { fr: titre, en: titre },
-        contents: { fr: message, en: message },
-      }
-    : {
-        app_id: ONESIGNAL_APP_ID,
-        include_external_user_ids: [userId],
-        channel_for_external_user_ids: 'push',
-        headings: { en: titre },
-        contents: { en: message },
-      };
+  let payload: object;
+
+  if (broadcast) {
+    payload = {
+      app_id: ONESIGNAL_APP_ID,
+      target_channel: 'push',
+      included_segments: ['All'],
+      headings: { fr: titre, en: titre },
+      contents: { fr: message, en: message },
+    };
+  } else {
+    // Récupère le player_id depuis la table clients
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
+    if (!serviceKey) {
+      console.error('[notify] SUPABASE_SERVICE_ROLE_KEY manquante — impossible de lire le player_id');
+      return json({ error: 'Configuration serveur manquante' }, 500);
+    }
+    let playerId: string | null = null;
+    try {
+      const sbRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/clients?select=onesignal_player_id&id=eq.${userId}&limit=1`,
+        { headers: { 'apikey': serviceKey, 'Authorization': `Bearer ${serviceKey}` } },
+      );
+      const sbData = await sbRes.json();
+      playerId = sbData[0]?.onesignal_player_id ?? null;
+    } catch (e) {
+      console.error('[notify] erreur lecture player_id Supabase:', e);
+    }
+    if (!playerId) {
+      console.error('[notify] player_id introuvable pour userId:', userId);
+      return json({ error: 'Abonné OneSignal introuvable pour cet utilisateur' }, 404);
+    }
+    payload = {
+      app_id: ONESIGNAL_APP_ID,
+      include_player_ids: [playerId],
+      headings: { en: titre },
+      contents: { en: message },
+    };
+  }
 
   console.log('[notify]', broadcast ? 'broadcast →' : 'envoi →', broadcast ? 'tous' : userId, '|', titre);
 

@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { supabase } from '../supabase';
 
 const ONESIGNAL_APP_ID = '528bb44d-bc6b-46a3-a40a-e3e9ed2c84e6';
 
@@ -87,6 +88,21 @@ export async function loginOneSignal(supabaseUserId: string): Promise<void> {
     if (window.OneSignal?.User?.addTag) {
       window.OneSignal.User.addTag('supabase_id', supabaseUserId);
       console.log('[OneSignal] tag supabase_id défini →', supabaseUserId);
+    }
+    // Récupère le player_id (subscription id) et le persiste dans la table clients
+    try {
+      const playerId: string | undefined = window.OneSignal?.User?.PushSubscription?.id;
+      if (playerId) {
+        await supabase
+          .from('clients')
+          .update({ onesignal_player_id: playerId })
+          .eq('id', supabaseUserId);
+        console.log('[OneSignal] player_id sauvegardé →', playerId);
+      } else {
+        console.warn('[OneSignal] PushSubscription.id non disponible');
+      }
+    } catch (e) {
+      console.error('[OneSignal] erreur sauvegarde player_id:', e);
     }
   } catch (e) {
     console.error('[OneSignal] loginOneSignal() erreur:', e);
