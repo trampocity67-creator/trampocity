@@ -80,23 +80,28 @@ export default async function handler(req: Request): Promise<Response> {
 
   console.log('[notify] OK ✓', osBody);
 
-  // Persister dans la table notifications (fire & forget — ne bloque pas la réponse)
+  // Persister dans la table notifications — awaité dans un try/catch isolé
+  // pour ne jamais bloquer la réponse OneSignal ni crasher la fonction
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
   if (serviceKey) {
-    fetch(`${SUPABASE_URL}/rest/v1/notifications`, {
-      method: 'POST',
-      headers: {
-        'apikey': serviceKey,
-        'Authorization': `Bearer ${serviceKey}`,
-        'Content-Type': 'application/json',
-        'Prefer': 'return=minimal',
-      },
-      body: JSON.stringify({
-        client_id: broadcast ? null : userId,
-        titre,
-        message,
-      }),
-    }).catch((e) => console.error('[notify] insert notifications échoué:', e));
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/notifications`, {
+        method: 'POST',
+        headers: {
+          'apikey': serviceKey,
+          'Authorization': `Bearer ${serviceKey}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({
+          client_id: broadcast ? null : userId,
+          titre,
+          message,
+        }),
+      });
+    } catch (e) {
+      console.error('[notify] insert notifications échoué:', e);
+    }
   }
 
   return new Response(osBody, {
