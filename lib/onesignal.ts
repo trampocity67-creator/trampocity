@@ -84,6 +84,10 @@ export async function loginOneSignal(supabaseUserId: string): Promise<void> {
     } else {
       console.warn('[OneSignal] window.OneSignal.login non disponible après init');
     }
+    if (window.OneSignal?.User?.addTag) {
+      window.OneSignal.User.addTag('supabase_id', supabaseUserId);
+      console.log('[OneSignal] tag supabase_id défini →', supabaseUserId);
+    }
   } catch (e) {
     console.error('[OneSignal] loginOneSignal() erreur:', e);
   }

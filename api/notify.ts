@@ -48,8 +48,7 @@ export default async function handler(req: Request): Promise<Response> {
       }
     : {
         app_id: ONESIGNAL_APP_ID,
-        include_external_user_ids: [userId],
-        channel_for_external_user_ids: 'push',
+        filters: [{ field: 'tag', key: 'supabase_id', relation: '=', value: userId }],
         headings: { en: titre },
         contents: { en: message },
       };
