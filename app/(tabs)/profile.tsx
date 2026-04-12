@@ -7,7 +7,7 @@ import { useClient } from '../../context/ClientContext';
 import { initiales } from '../../lib/utils';
 
 export default function ProfileScreen() {
-  const { client, loading } = useClient();
+  const { client, loading, refresh } = useClient();
   const [infoExpanded, setInfoExpanded] = useState(false);
 
   async function seDeconnecter() {
@@ -41,6 +41,9 @@ export default function ProfileScreen() {
           <Text style={styles.name}>{client?.nom}</Text>
           <Text style={styles.since}>{client?.points?.toLocaleString('fr-FR')} pts</Text>
         </View>
+        <TouchableOpacity style={styles.refreshBtn} onPress={refresh} activeOpacity={0.7}>
+          <Text style={styles.refreshIcon}>🔄</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
@@ -197,4 +200,6 @@ const styles = StyleSheet.create({
   recompenseNom: { fontSize: 13, fontWeight: '500', color: '#1a1a1a' },
   recompenseDate: { fontSize: 11, color: '#888', marginTop: 2 },
   recompensePts: { fontSize: 13, fontWeight: '500', color: '#E31E24' },
+  refreshBtn: { position: 'absolute', top: 16, right: 16, padding: 8 },
+  refreshIcon: { fontSize: 16, opacity: 0.8 },
 });

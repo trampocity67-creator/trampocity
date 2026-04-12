@@ -387,6 +387,12 @@ export default function AdminScreen() {
     );
   }
 
+  async function chargerDonnees() {
+    setLoading(true);
+    await chargerClients();
+    if (onglet === 'recompenses') chargerDemandes();
+  }
+
   async function envoyerNotifTous() {
     const titre = notifTousTitre.trim();
     const message = notifTousMessage.trim();
@@ -500,6 +506,9 @@ export default function AdminScreen() {
         </TouchableOpacity>
         <Text style={styles.title}>Dashboard Admin 📊</Text>
         <Text style={styles.sub}>TRAMPO CITY — Gestion clients</Text>
+        <TouchableOpacity style={styles.refreshBtn} onPress={chargerDonnees} activeOpacity={0.7}>
+          <Text style={styles.refreshIcon}>🔄</Text>
+        </TouchableOpacity>
         <View style={styles.headerBtns}>
           <TouchableOpacity style={styles.headerBtn} onPress={() => { setScanModal(true); setScanClient(null); setScanId(''); setScanErreur(null); }} activeOpacity={0.8}>
             <Text style={styles.headerBtnText}>📋 Scanner un QR code</Text>
@@ -948,4 +957,6 @@ const styles = StyleSheet.create({
     borderWidth: 0.5, borderColor: '#ddd',
   },
   demandeRefuserText: { color: '#888', fontSize: 13 },
+  refreshBtn: { position: 'absolute', top: 16, right: 16, padding: 8 },
+  refreshIcon: { fontSize: 16, opacity: 0.8 },
 });

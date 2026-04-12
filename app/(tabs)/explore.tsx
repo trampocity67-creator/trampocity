@@ -58,7 +58,7 @@ interface HistoriqueItem {
 }
 
 export default function RewardsScreen() {
-  const { client, loading } = useClient();
+  const { client, loading, refresh } = useClient();
   const [top5, setTop5] = useState<TopClient[]>([]);
   const [top5Loading, setTop5Loading] = useState(true);
   const [confirmModal, setConfirmModal] = useState(false);
@@ -86,6 +86,17 @@ export default function RewardsScreen() {
       .order('created_at', { ascending: false })
       .then(({ data }) => setHistorique((data ?? []) as HistoriqueItem[]));
   }, [client?.id]);
+
+  async function chargerDonnees() {
+    await refresh();
+    supabase.from('clients').select('id, nom, points').order('points', { ascending: false }).limit(5)
+      .then(({ data }) => setTop5((data ?? []) as TopClient[]));
+    if (client?.id) {
+      supabase.from('recompenses_utilisees').select('id, recompense_nom, points_depenses, created_at, statut')
+        .eq('client_id', client.id).order('created_at', { ascending: false })
+        .then(({ data }) => setHistorique((data ?? []) as HistoriqueItem[]));
+    }
+  }
 
   async function demanderRecompense(recompense: Recompense) {
     if (!client) return;
@@ -133,6 +144,9 @@ export default function RewardsScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>Récompenses 🎁</Text>
         <Text style={styles.sub}>Votre solde : {client?.points?.toLocaleString('fr-FR')} pts</Text>
+        <TouchableOpacity style={styles.refreshBtn} onPress={chargerDonnees} activeOpacity={0.7}>
+          <Text style={styles.refreshIcon}>🔄</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
@@ -326,4 +340,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40, marginTop: 4,
   },
   confirmBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  refreshBtn: { position: 'absolute', top: 16, right: 16, padding: 8 },
+  refreshIcon: { fontSize: 16, opacity: 0.8 },
 });

@@ -10,7 +10,7 @@ const HORAIRES_NORMAL = [
 ];
 
 export default function HomeScreen() {
-  const { client, sessions, loading } = useClient();
+  const { client, sessions, loading, refresh } = useClient();
   const [notifPermission, setNotifPermission] = useState<'default' | 'granted' | 'denied'>('default');
   const [isPwa, setIsPwa] = useState(false);
   const [classement, setClassement] = useState<{ rang: number; total: number } | null>(null);
@@ -32,6 +32,16 @@ export default function HomeScreen() {
       setClassement({ rang, total });
     });
   }, [client?.id, client?.points]);
+
+  async function chargerDonnees() {
+    await refresh();
+    if (!client?.id) return;
+    const [devant, tous] = await Promise.all([
+      supabase.from('clients').select('id', { count: 'exact', head: true }).gt('points', client.points),
+      supabase.from('clients').select('id', { count: 'exact', head: true }),
+    ]);
+    setClassement({ rang: (devant.count ?? 0) + 1, total: tous.count ?? 0 });
+  }
 
   async function activerNotifications() {
     if (Platform.OS !== 'web') return;
@@ -57,6 +67,9 @@ export default function HomeScreen() {
       <View style={styles.header}>
         <Text style={styles.logo}>🤸 TRAMPO CITY</Text>
         <Text style={styles.greeting}>Bonjour, {client?.nom?.split(' ')[0]} ! 👋</Text>
+        <TouchableOpacity style={styles.refreshBtn} onPress={chargerDonnees} activeOpacity={0.7}>
+          <Text style={styles.refreshIcon}>🔄</Text>
+        </TouchableOpacity>
         <View style={styles.pointsCard}>
           <Text style={styles.pointsLabel}>MES POINTS</Text>
           <Text style={styles.pointsValue}>{client?.points?.toLocaleString('fr-FR')}</Text>
@@ -250,4 +263,6 @@ const styles = StyleSheet.create({
   activityName: { fontSize: 13, fontWeight: '500', color: '#1a1a1a' },
   activityDate: { fontSize: 11, color: '#888', marginTop: 2 },
   activityPts: { fontSize: 14, fontWeight: '500' },
+  refreshBtn: { position: 'absolute', top: 16, right: 16, padding: 8 },
+  refreshIcon: { fontSize: 16, opacity: 0.8 },
 });
