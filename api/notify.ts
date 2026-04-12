@@ -49,7 +49,7 @@ export default async function handler(req: Request): Promise<Response> {
     : {
         app_id: ONESIGNAL_APP_ID,
         target_channel: 'push',
-        include_external_user_ids: [userId],
+        include_aliases: { external_id: [userId] },
         headings: { fr: titre, en: titre },
         contents: { fr: message, en: message },
       };
