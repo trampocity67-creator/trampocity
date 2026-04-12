@@ -96,11 +96,17 @@ export async function loginOneSignal(supabaseUserId: string): Promise<void> {
       const playerId: string | undefined = window.OneSignal?.User?.PushSubscription?.id;
       console.log('[OneSignal] PushSubscription.id brut:', playerId);
       if (playerId) {
-        console.log('[OneSignal] tentative update Supabase → client_id:', supabaseUserId, 'player_id:', playerId);
+        const { data: { user } } = await supabase.auth.getUser();
+        console.log('[OneSignal] auth.getUser() email:', user?.email);
+        if (!user?.email) {
+          console.error('[OneSignal] utilisateur non connecté — impossible de sauvegarder le player_id');
+          return;
+        }
+        console.log('[OneSignal] tentative update Supabase → email:', user.email, 'player_id:', playerId);
         const { data, error } = await supabase
           .from('clients')
           .update({ onesignal_player_id: playerId })
-          .eq('id', supabaseUserId)
+          .eq('email', user.email)
           .select('id, onesignal_player_id');
         if (error) {
           console.error('[OneSignal] erreur Supabase update:', error.message, error.details, error.hint);
