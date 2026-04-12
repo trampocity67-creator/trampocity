@@ -80,12 +80,19 @@ export default async function handler(req: Request): Promise<Response> {
 
   console.log('[notify] OK ✓', osBody);
 
-  // Persister dans la table notifications — awaité dans un try/catch isolé
-  // pour ne jamais bloquer la réponse OneSignal ni crasher la fonction
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
-  if (serviceKey) {
-    try {
-      await fetch(`${SUPABASE_URL}/rest/v1/notifications`, {
+  // Répondre AU CLIENT immédiatement — l'insert Supabase ne doit jamais bloquer
+  const clientResponse = new Response(osBody, {
+    status: 200,
+    headers: { 'Content-Type': 'application/json', ...corsHeaders() },
+  });
+
+  // Insert notifications — best-effort, complètement isolé
+  // Lancé AVANT le return pour que l'edge runtime puisse le compléter,
+  // mais NON awaité pour ne pas retarder la réponse
+  try {
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
+    if (serviceKey) {
+      fetch(`${SUPABASE_URL}/rest/v1/notifications`, {
         method: 'POST',
         headers: {
           'apikey': serviceKey,
@@ -98,16 +105,13 @@ export default async function handler(req: Request): Promise<Response> {
           titre,
           message,
         }),
-      });
-    } catch (e) {
-      console.error('[notify] insert notifications échoué:', e);
+      }).catch((e) => console.error('[notify] insert notifications échoué:', e));
     }
+  } catch (e) {
+    console.error('[notify] insert notifications erreur sync:', e);
   }
 
-  return new Response(osBody, {
-    status: 200,
-    headers: { 'Content-Type': 'application/json', ...corsHeaders() },
-  });
+  return clientResponse;
 }
 
 function json(data: object, status = 200): Response {
