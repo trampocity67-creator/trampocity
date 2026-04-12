@@ -41,7 +41,7 @@ export default async function handler(req: Request): Promise<Response> {
     ? {
         app_id: ONESIGNAL_APP_ID,
         target_channel: 'push',
-        included_segments: ['Subscribed Users'],
+        included_segments: ['All'],
         headings: { fr: titre, en: titre },
         contents: { fr: message, en: message },
       }
