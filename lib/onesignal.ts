@@ -91,15 +91,26 @@ export async function loginOneSignal(supabaseUserId: string): Promise<void> {
     }
     // Récupère le player_id (subscription id) et le persiste dans la table clients
     try {
+      console.log('[OneSignal] User object:', window.OneSignal?.User);
+      console.log('[OneSignal] PushSubscription object:', window.OneSignal?.User?.PushSubscription);
       const playerId: string | undefined = window.OneSignal?.User?.PushSubscription?.id;
+      console.log('[OneSignal] PushSubscription.id brut:', playerId);
       if (playerId) {
-        await supabase
+        console.log('[OneSignal] tentative update Supabase → client_id:', supabaseUserId, 'player_id:', playerId);
+        const { data, error } = await supabase
           .from('clients')
           .update({ onesignal_player_id: playerId })
-          .eq('id', supabaseUserId);
-        console.log('[OneSignal] player_id sauvegardé →', playerId);
+          .eq('id', supabaseUserId)
+          .select('id, onesignal_player_id');
+        if (error) {
+          console.error('[OneSignal] erreur Supabase update:', error.message, error.details, error.hint);
+        } else {
+          console.log('[OneSignal] player_id sauvegardé ✓ — réponse Supabase:', data);
+        }
       } else {
-        console.warn('[OneSignal] PushSubscription.id non disponible');
+        console.warn('[OneSignal] PushSubscription.id est null/undefined — abonné non enregistré ou permission refusée');
+        console.log('[OneSignal] état permission:', window.OneSignal?.Notifications?.permission);
+        console.log('[OneSignal] isPushSupported:', window.OneSignal?.Notifications?.isPushSupported?.());
       }
     } catch (e) {
       console.error('[OneSignal] erreur sauvegarde player_id:', e);
