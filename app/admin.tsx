@@ -2,7 +2,7 @@ import jsQR from 'jsqr';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Platform, ScrollView, StyleSheet,
+  ActivityIndicator, Platform, ScrollView, StyleSheet,
   Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { supabase } from '../supabase';
@@ -10,25 +10,7 @@ import { Client } from '../lib/types';
 import { initiales } from '../lib/utils';
 import { envoyerNotification } from '../lib/onesignal';
 import { POINTS_1H, POINTS_2H, POINTS_PENALITE } from '../lib/constants';
-
-function alerter(titre: string, message: string) {
-  if (Platform.OS === 'web') {
-    window.alert(`${titre}\n${message}`);
-  } else {
-    Alert.alert(titre, message);
-  }
-}
-
-function confirmer(titre: string, message: string, onConfirm: () => void) {
-  if (Platform.OS === 'web') {
-    if (window.confirm(`${titre}\n${message}`)) onConfirm();
-  } else {
-    Alert.alert(titre, message, [
-      { text: 'Annuler', style: 'cancel' },
-      { text: 'Confirmer', onPress: onConfirm },
-    ]);
-  }
-}
+import { useModales } from '../hooks/useModales';
 
 interface Demande {
   id: string;
@@ -64,6 +46,8 @@ export default function AdminScreen() {
   const canvasRef = useRef<any>(null);
   const streamRef = useRef<any>(null);
   const animRef = useRef<number | null>(null);
+  const { alerter, confirmer, ModalNode } = useModales();
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     verifierAdmin();
@@ -389,9 +373,12 @@ export default function AdminScreen() {
   }
 
   async function chargerDonnees() {
+    if (refreshing) return;
+    setRefreshing(true);
     setLoading(true);
     await chargerClients();
     if (onglet === 'recompenses') chargerDemandes();
+    setRefreshing(false);
   }
 
   function supprimerClient(c: Client) {
@@ -399,11 +386,12 @@ export default function AdminScreen() {
       '🗑️ Supprimer le client',
       `Supprimer définitivement ${c.nom} et toutes ses données ? Cette action est irréversible.`,
       async () => {
-        // Suppression dans l'ordre pour respecter les FK
-        await supabase.from('notifications').delete().eq('client_id', c.id);
-        await supabase.from('recompenses_utilisees').delete().eq('client_id', c.id);
-        await supabase.from('sessions').delete().eq('client_id', c.id);
-        await supabase.from('clients').delete().eq('id', c.id);
+        const { error } = await supabase.rpc('supprimer_client', { p_client_id: c.id });
+
+        if (error) {
+          alerter('Erreur', `La suppression a échoué : ${error.message}`);
+          return;
+        }
 
         // Suppression du compte auth via l'Edge Function (lookup par email côté serveur)
         try {
@@ -544,8 +532,8 @@ export default function AdminScreen() {
         </TouchableOpacity>
         <Text style={styles.title}>Dashboard Admin 📊</Text>
         <Text style={styles.sub}>TRAMPO CITY — Gestion clients</Text>
-        <TouchableOpacity style={styles.refreshBtn} onPress={chargerDonnees} activeOpacity={0.7}>
-          <Text style={styles.refreshIcon}>🔄</Text>
+        <TouchableOpacity style={styles.refreshBtn} onPress={chargerDonnees} activeOpacity={0.7} disabled={refreshing}>
+          <Text style={[styles.refreshIcon, refreshing && { opacity: 0.4 }]}>🔄</Text>
         </TouchableOpacity>
         <View style={styles.headerBtns}>
           <TouchableOpacity style={styles.headerBtn} onPress={() => { setScanModal(true); setScanClient(null); setScanId(''); setScanErreur(null); }} activeOpacity={0.8}>
@@ -830,6 +818,7 @@ export default function AdminScreen() {
           </View>
         </View>
       )}
+      {ModalNode}
     </View>
   );
 }

@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Modal, Platform, ScrollView, StyleSheet,
+  ActivityIndicator, Modal, ScrollView, StyleSheet,
   Text, TouchableOpacity, View,
 } from 'react-native';
 import { supabase } from '../../supabase';
 import { useClient } from '../../context/ClientContext';
 import { prenomInitiale } from '../../lib/utils';
+import { useModales } from '../../hooks/useModales';
 
 interface Recompense {
   nom: string;
@@ -21,33 +22,7 @@ interface TopClient {
   points: number;
 }
 
-const RECOMPENSES: Recompense[] = [
-  { nom: 'Boisson offerte', desc: 'Au bar de TRAMPO CITY', points: 200, emoji: '🥤', bg: '#EAF3DE' },
-  { nom: 'Chaussettes grip', desc: 'Paire de chaussettes premium', points: 400, emoji: '🧦', bg: '#FBEAF0' },
-  { nom: 'Entrée 1h offerte', desc: 'Valable en semaine', points: 800, emoji: '🎟️', bg: '#FDEAEA' },
-  { nom: 'Accès VIP 2h', desc: 'Zone exclusive + boisson', points: 2000, emoji: '⭐', bg: '#FAEEDA' },
-];
-
 const MEDAILLES = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
-
-function alerter(titre: string, message: string) {
-  if (Platform.OS === 'web') {
-    window.alert(`${titre}\n${message}`);
-  } else {
-    Alert.alert(titre, message);
-  }
-}
-
-function confirmer(message: string, onConfirm: () => void) {
-  if (Platform.OS === 'web') {
-    if (window.confirm(message)) onConfirm();
-  } else {
-    Alert.alert('🎁 Confirmer', message, [
-      { text: 'Annuler', style: 'cancel' },
-      { text: 'Confirmer', onPress: onConfirm },
-    ]);
-  }
-}
 
 interface HistoriqueItem {
   id: string;
@@ -65,6 +40,15 @@ export default function RewardsScreen() {
   const [demandeEnCours, setDemandeEnCours] = useState(false);
   const [nomRecompenseEnCours, setNomRecompenseEnCours] = useState<string | null>(null);
   const [historique, setHistorique] = useState<HistoriqueItem[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const { alerter, confirmer, ModalNode } = useModales();
+
+  const recompenses = useMemo<Recompense[]>(() => [
+    { nom: 'Boisson offerte',  desc: 'Au bar de TRAMPO CITY',        points: 200,  emoji: '🥤', bg: '#EAF3DE' },
+    { nom: 'Chaussettes grip', desc: 'Paire de chaussettes premium', points: 400,  emoji: '🧦', bg: '#FBEAF0' },
+    { nom: 'Entrée 1h offerte',desc: 'Valable en semaine',           points: 800,  emoji: '🎟️', bg: '#FDEAEA' },
+    { nom: 'Accès VIP 2h',     desc: 'Zone exclusive + boisson',     points: 2000, emoji: '⭐', bg: '#FAEEDA' },
+  ], []);
 
   useEffect(() => {
     supabase
@@ -89,13 +73,23 @@ export default function RewardsScreen() {
   }, [client?.id]);
 
   async function chargerDonnees() {
-    await refresh();
-    supabase.from('clients').select('id, nom, points').order('points', { ascending: false }).limit(5)
-      .then(({ data }) => setTop5((data ?? []) as TopClient[]));
-    if (client?.id) {
-      supabase.from('recompenses_utilisees').select('id, recompense_nom, points_depenses, created_at, statut')
-        .eq('client_id', client.id).order('created_at', { ascending: false })
-        .then(({ data }) => setHistorique((data ?? []) as HistoriqueItem[]));
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await refresh();
+      const { data: top5Data } = await supabase
+        .from('clients').select('id, nom, points')
+        .order('points', { ascending: false }).limit(5);
+      setTop5((top5Data ?? []) as TopClient[]);
+      if (client?.id) {
+        const { data: histoData } = await supabase
+          .from('recompenses_utilisees')
+          .select('id, recompense_nom, points_depenses, created_at, statut')
+          .eq('client_id', client.id).order('created_at', { ascending: false });
+        setHistorique((histoData ?? []) as HistoriqueItem[]);
+      }
+    } finally {
+      setRefreshing(false);
     }
   }
 
@@ -106,7 +100,8 @@ export default function RewardsScreen() {
       return;
     }
     confirmer(
-      `Demander "${recompense.nom}" pour ${recompense.points} pts ?`,
+      '🎁 Utiliser cette récompense',
+      `Demander "${recompense.nom}" pour ${recompense.points.toLocaleString('fr-FR')} pts ?`,
       async () => {
         setDemandeEnCours(true);
         setNomRecompenseEnCours(recompense.nom);
@@ -168,8 +163,8 @@ export default function RewardsScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>Récompenses 🎁</Text>
         <Text style={styles.sub}>Votre solde : {client?.points?.toLocaleString('fr-FR')} pts</Text>
-        <TouchableOpacity style={styles.refreshBtn} onPress={chargerDonnees} activeOpacity={0.7}>
-          <Text style={styles.refreshIcon}>🔄</Text>
+        <TouchableOpacity style={styles.refreshBtn} onPress={chargerDonnees} activeOpacity={0.7} disabled={refreshing}>
+          <Text style={[styles.refreshIcon, refreshing && { opacity: 0.4 }]}>🔄</Text>
         </TouchableOpacity>
       </View>
 
@@ -205,7 +200,7 @@ export default function RewardsScreen() {
         {/* Récompenses */}
         <Text style={styles.sectionTitle}>Mes récompenses</Text>
 
-        {RECOMPENSES.map((r) => {
+        {recompenses.map((r) => {
           const suffisant = (client?.points ?? 0) >= r.points;
           return (
             <View key={r.nom} style={styles.rewardCard}>
@@ -285,6 +280,7 @@ export default function RewardsScreen() {
           </View>
         </View>
       </Modal>
+      {ModalNode}
     </View>
   );
 }

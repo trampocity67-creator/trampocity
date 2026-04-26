@@ -2,13 +2,14 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
-  ActivityIndicator, Alert, Platform, StyleSheet, Text,
+  ActivityIndicator, Platform, StyleSheet, Text,
   TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { supabase } from '../supabase';
 import { Client } from '../lib/types';
 import { initiales } from '../lib/utils';
 import { POINTS_1H, POINTS_2H } from '../lib/constants';
+import { useModales } from '../hooks/useModales';
 
 // ─── Web scanner : saisie manuelle de l'ID client ────────────────────────────
 
@@ -17,6 +18,7 @@ function ScannerWeb() {
   const [loading, setLoading] = useState(false);
   const [client, setClient] = useState<Client | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
+  const { alerter, ModalNode } = useModales();
 
   async function rechercherClient() {
     const id = idInput.trim();
@@ -48,93 +50,94 @@ function ScannerWeb() {
     ]);
 
     if (sessionRes.error || updateRes.error) {
-      window.alert("Erreur — La session n'a pas pu être enregistrée. Réessayez.");
+      alerter('Erreur', "La session n'a pas pu être enregistrée. Réessayez.");
     } else {
-      window.alert(`✅ Session validée !\n${client.nom} a reçu +${montant} pts\nTotal : ${nouveauxPoints.toLocaleString('fr-FR')} pts`);
+      alerter('✅ Session validée !', `${client.nom} a reçu +${montant} pts\nTotal : ${nouveauxPoints.toLocaleString('fr-FR')} pts`);
     }
 
     setClient(null);
     setIdInput('');
   }
 
-  if (client) {
-    return (
-      <View style={styles.modalPage}>
-        <View style={styles.clientCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initiales(client.nom)}</Text>
-          </View>
-          <Text style={styles.clientNom}>{client.nom}</Text>
-          <Text style={styles.clientEmail}>{client.email}</Text>
-          <View style={styles.infoRow}>
-            <View style={styles.infoCard}>
-              <Text style={styles.infoVal}>{client.points.toLocaleString('fr-FR')}</Text>
-              <Text style={styles.infoLbl}>Points</Text>
+  return (
+    <>
+      {ModalNode}
+      {client ? (
+        <View style={styles.modalPage}>
+          <View style={styles.clientCard}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{initiales(client.nom)}</Text>
+            </View>
+            <Text style={styles.clientNom}>{client.nom}</Text>
+            <Text style={styles.clientEmail}>{client.email}</Text>
+            <View style={styles.infoRow}>
+              <View style={styles.infoCard}>
+                <Text style={styles.infoVal}>{client.points.toLocaleString('fr-FR')}</Text>
+                <Text style={styles.infoLbl}>Points</Text>
+              </View>
             </View>
           </View>
+
+          <Text style={styles.question}>Quelle session valider ?</Text>
+
+          <TouchableOpacity style={styles.btn} onPress={() => valider(POINTS_1H)} activeOpacity={0.8}>
+            <Text style={styles.btnText}>🤸 +{POINTS_1H} pts — Session 1h</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.btn} onPress={() => valider(POINTS_2H)} activeOpacity={0.8}>
+            <Text style={styles.btnText}>🤸 +{POINTS_2H} pts — Session 2h</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.btnAnnuler} onPress={() => { setClient(null); setIdInput(''); }} activeOpacity={0.8}>
+            <Text style={styles.btnAnnulerText}>Annuler</Text>
+          </TouchableOpacity>
         </View>
+      ) : (
+        <View style={styles.webContainer}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+            <Text style={styles.backText}>← Retour</Text>
+          </TouchableOpacity>
 
-        <Text style={styles.question}>Quelle session valider ?</Text>
-
-        <TouchableOpacity style={styles.btn} onPress={() => valider(POINTS_1H)} activeOpacity={0.8}>
-          <Text style={styles.btnText}>🤸 +{POINTS_1H} pts — Session 1h</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.btn} onPress={() => valider(POINTS_2H)} activeOpacity={0.8}>
-          <Text style={styles.btnText}>🤸 +{POINTS_2H} pts — Session 2h</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.btnAnnuler} onPress={() => { setClient(null); setIdInput(''); }} activeOpacity={0.8}>
-          <Text style={styles.btnAnnulerText}>Annuler</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.webContainer}>
-      <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-        <Text style={styles.backText}>← Retour</Text>
-      </TouchableOpacity>
-
-      <View style={styles.webHeader}>
-        <Text style={styles.webHeaderIcon}>📋</Text>
-        <Text style={styles.webHeaderTitle}>Valider une session</Text>
-        <Text style={styles.webHeaderSub}>Saisissez l'identifiant client affiché sous le QR code dans l'application</Text>
-      </View>
-
-      <View style={styles.webCard}>
-        <Text style={styles.webStepLabel}>1. Client ouvre son profil dans l'app</Text>
-        <Text style={styles.webStepDesc}>L'ID est affiché en bas du QR code : <Text style={styles.webStepMono}>ID : XXXXXXXX</Text></Text>
-
-        <Text style={[styles.webStepLabel, { marginTop: 16 }]}>2. Entrez l'ID complet (UUID)</Text>
-        <TextInput
-          style={styles.webInput}
-          placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-          value={idInput}
-          onChangeText={(v) => { setIdInput(v); setErreur(null); }}
-          placeholderTextColor="#bbb"
-          autoCapitalize="none"
-          autoCorrect={false}
-          onSubmitEditing={rechercherClient}
-        />
-
-        {erreur && (
-          <View style={styles.webErrorBox}>
-            <Text style={styles.webErrorText}>⚠️  {erreur}</Text>
+          <View style={styles.webHeader}>
+            <Text style={styles.webHeaderIcon}>📋</Text>
+            <Text style={styles.webHeaderTitle}>Valider une session</Text>
+            <Text style={styles.webHeaderSub}>Saisissez l'identifiant client affiché sous le QR code dans l'application</Text>
           </View>
-        )}
 
-        <TouchableOpacity
-          style={[styles.btn, (!idInput.trim() || loading) && styles.btnDisabled]}
-          onPress={rechercherClient}
-          disabled={!idInput.trim() || loading}
-          activeOpacity={0.8}>
-          {loading
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.btnText}>Rechercher le client →</Text>
-          }
-        </TouchableOpacity>
-      </View>
-    </View>
+          <View style={styles.webCard}>
+            <Text style={styles.webStepLabel}>1. Client ouvre son profil dans l'app</Text>
+            <Text style={styles.webStepDesc}>L'ID est affiché en bas du QR code : <Text style={styles.webStepMono}>ID : XXXXXXXX</Text></Text>
+
+            <Text style={[styles.webStepLabel, { marginTop: 16 }]}>2. Entrez l'ID complet (UUID)</Text>
+            <TextInput
+              style={styles.webInput}
+              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+              value={idInput}
+              onChangeText={(v) => { setIdInput(v); setErreur(null); }}
+              placeholderTextColor="#bbb"
+              autoCapitalize="none"
+              autoCorrect={false}
+              onSubmitEditing={rechercherClient}
+            />
+
+            {erreur && (
+              <View style={styles.webErrorBox}>
+                <Text style={styles.webErrorText}>⚠️  {erreur}</Text>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={[styles.btn, (!idInput.trim() || loading) && styles.btnDisabled]}
+              onPress={rechercherClient}
+              disabled={!idInput.trim() || loading}
+              activeOpacity={0.8}>
+              {loading
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.btnText}>Rechercher le client →</Text>
+              }
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+    </>
   );
 }
 
@@ -151,6 +154,7 @@ function ScannerMobile() {
   const [loading, setLoading] = useState(false);
   const [client, setClient] = useState<Client | null>(null);
   const [modal, setModal] = useState(false);
+  const { alerter, ModalNode } = useModales();
 
   if (!permission) return <View style={styles.container} />;
 
@@ -184,10 +188,10 @@ function ScannerMobile() {
     setLoading(false);
 
     if (error || !clientData) {
-      Alert.alert(
+      alerter(
         'QR code non reconnu',
         'Ce code ne correspond à aucun client TRAMPO CITY.',
-        [{ text: 'Réessayer', onPress: () => setScanned(false) }]
+        () => setScanned(false),
       );
       return;
     }
@@ -214,11 +218,11 @@ function ScannerMobile() {
     ]);
 
     if (sessionRes.error || updateRes.error) {
-      Alert.alert('Erreur', "La session n'a pas pu être enregistrée. Réessayez.");
+      alerter('Erreur', "La session n'a pas pu être enregistrée. Réessayez.");
     } else {
-      Alert.alert(
+      alerter(
         '✅ Session validée !',
-        `${client.nom} a reçu +${montant} pts (${nouveauxPoints.toLocaleString('fr-FR')} pts au total)`
+        `${client.nom} a reçu +${montant} pts (${nouveauxPoints.toLocaleString('fr-FR')} pts au total)`,
       );
     }
 
@@ -234,6 +238,7 @@ function ScannerMobile() {
 
   return (
     <View style={styles.container}>
+      {ModalNode}
       {!modal && (
         <CameraView
           style={styles.camera}
@@ -348,9 +353,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff', borderRadius: 16, padding: 24,
     alignItems: 'center', gap: 14, borderWidth: 0.5, borderColor: '#ddd', marginTop: 16,
   },
-  webIcon: { fontSize: 48 },
-  webTitle: { fontSize: 18, fontWeight: '500', color: '#1a1a1a' },
-  webDesc: { fontSize: 13, color: '#888', textAlign: 'center', lineHeight: 20 },
   webInput: {
     width: '100%', backgroundColor: '#f7f7f5', borderRadius: 12, borderWidth: 0.5,
     borderColor: '#ddd', padding: 14, fontSize: 14, color: '#1a1a1a',

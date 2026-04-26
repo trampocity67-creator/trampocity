@@ -42,9 +42,17 @@ export default function ProfileScreen() {
     setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, lu: true } : n));
   }
 
+  const [refreshing, setRefreshing] = useState(false);
+
   async function refreshAll() {
-    await refresh();
-    await chargerNotifications();
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await refresh();
+      await chargerNotifications();
+    } finally {
+      setRefreshing(false);
+    }
   }
 
   async function seDeconnecter() {
@@ -78,8 +86,8 @@ export default function ProfileScreen() {
           <Text style={styles.name}>{client?.nom}</Text>
           <Text style={styles.since}>{client?.points?.toLocaleString('fr-FR')} pts</Text>
         </View>
-        <TouchableOpacity style={styles.refreshBtn} onPress={refreshAll} activeOpacity={0.7}>
-          <Text style={styles.refreshIcon}>🔄</Text>
+        <TouchableOpacity style={styles.refreshBtn} onPress={refreshAll} activeOpacity={0.7} disabled={refreshing}>
+          <Text style={[styles.refreshIcon, refreshing && { opacity: 0.4 }]}>🔄</Text>
         </TouchableOpacity>
       </View>
 

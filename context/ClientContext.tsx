@@ -6,6 +6,7 @@ interface ClientContextValue {
   client: Client | null;
   sessions: Session[];
   loading: boolean;
+  erreur: string | null;
   refresh: () => Promise<void>;
 }
 
@@ -13,6 +14,7 @@ const ClientContext = createContext<ClientContextValue>({
   client: null,
   sessions: [],
   loading: true,
+  erreur: null,
   refresh: async () => {},
 });
 
@@ -20,6 +22,7 @@ export function ClientProvider({ children }: { children: React.ReactNode }) {
   const [client, setClient] = useState<Client | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erreur, setErreur] = useState<string | null>(null);
 
   async function chargerDonnees(email: string) {
     const { data: clientData, error } = await supabase
@@ -28,7 +31,13 @@ export function ClientProvider({ children }: { children: React.ReactNode }) {
       .eq('email', email)
       .single();
 
-    if (error || !clientData) { setLoading(false); return; }
+    if (error || !clientData) {
+      console.error('[ClientContext] chargerDonnees erreur:', error?.message);
+      setErreur('Impossible de charger votre profil. Vérifiez votre connexion et réessayez.');
+      setLoading(false);
+      return;
+    }
+    setErreur(null);
     setClient(clientData as Client);
 
     const { data: sessionData } = await supabase
@@ -59,6 +68,7 @@ export function ClientProvider({ children }: { children: React.ReactNode }) {
       } else if (event === 'SIGNED_OUT') {
         setClient(null);
         setSessions([]);
+        setErreur(null);
         setLoading(false);
       }
       // TOKEN_REFRESHED, USER_UPDATED → session déjà valide, pas de rechargement
@@ -91,7 +101,7 @@ export function ClientProvider({ children }: { children: React.ReactNode }) {
   }, [client?.id]);
 
   return (
-    <ClientContext.Provider value={{ client, sessions, loading, refresh }}>
+    <ClientContext.Provider value={{ client, sessions, loading, erreur, refresh }}>
       {children}
     </ClientContext.Provider>
   );

@@ -10,10 +10,11 @@ const HORAIRES_NORMAL = [
 ];
 
 export default function HomeScreen() {
-  const { client, sessions, loading, refresh } = useClient();
+  const { client, sessions, loading, erreur, refresh } = useClient();
   const [notifPermission, setNotifPermission] = useState<'default' | 'granted' | 'denied'>('default');
   const [isPwa, setIsPwa] = useState(false);
   const [classement, setClassement] = useState<{ rang: number; total: number } | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     if (Platform.OS !== 'web') return;
@@ -34,13 +35,19 @@ export default function HomeScreen() {
   }, [client?.id, client?.points]);
 
   async function chargerDonnees() {
-    await refresh();
-    if (!client?.id) return;
-    const [devant, tous] = await Promise.all([
-      supabase.from('clients').select('id', { count: 'exact', head: true }).gt('points', client.points),
-      supabase.from('clients').select('id', { count: 'exact', head: true }),
-    ]);
-    setClassement({ rang: (devant.count ?? 0) + 1, total: tous.count ?? 0 });
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await refresh();
+      if (!client?.id) return;
+      const [devant, tous] = await Promise.all([
+        supabase.from('clients').select('id', { count: 'exact', head: true }).gt('points', client.points),
+        supabase.from('clients').select('id', { count: 'exact', head: true }),
+      ]);
+      setClassement({ rang: (devant.count ?? 0) + 1, total: tous.count ?? 0 });
+    } finally {
+      setRefreshing(false);
+    }
   }
 
   async function activerNotifications() {
@@ -62,13 +69,25 @@ export default function HomeScreen() {
     );
   }
 
+  if (erreur) {
+    return (
+      <View style={styles.loading}>
+        <Text style={styles.erreurIcon}>⚠️</Text>
+        <Text style={styles.erreurText}>{erreur}</Text>
+        <TouchableOpacity style={styles.erreurBtn} onPress={refresh} activeOpacity={0.8}>
+          <Text style={styles.erreurBtnText}>Réessayer</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.logo}>🤸 TRAMPO CITY</Text>
         <Text style={styles.greeting}>Bonjour, {client?.nom?.split(' ')[0]} ! 👋</Text>
-        <TouchableOpacity style={styles.refreshBtn} onPress={chargerDonnees} activeOpacity={0.7}>
-          <Text style={styles.refreshIcon}>🔄</Text>
+        <TouchableOpacity style={styles.refreshBtn} onPress={chargerDonnees} activeOpacity={0.7} disabled={refreshing}>
+          <Text style={[styles.refreshIcon, refreshing && { opacity: 0.4 }]}>🔄</Text>
         </TouchableOpacity>
         <View style={styles.pointsCard}>
           <Text style={styles.pointsLabel}>MES POINTS</Text>
@@ -265,4 +284,8 @@ const styles = StyleSheet.create({
   activityPts: { fontSize: 14, fontWeight: '500' },
   refreshBtn: { position: 'absolute', top: 16, right: 16, padding: 8 },
   refreshIcon: { fontSize: 16, opacity: 0.8 },
+  erreurIcon: { fontSize: 40, marginBottom: 8 },
+  erreurText: { fontSize: 14, color: '#888', textAlign: 'center', paddingHorizontal: 32, lineHeight: 20, marginBottom: 20 },
+  erreurBtn: { backgroundColor: '#E31E24', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 32 },
+  erreurBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
 });
