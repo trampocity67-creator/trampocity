@@ -73,8 +73,8 @@ export default async function handler(req: Request): Promise<Response> {
     payload = {
       app_id: ONESIGNAL_APP_ID,
       include_player_ids: [playerId],
-      headings: { en: titre },
-      contents: { en: message },
+      headings: { fr: titre, en: titre },
+      contents: { fr: message, en: message },
     };
   }
 

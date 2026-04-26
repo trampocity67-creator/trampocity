@@ -63,6 +63,7 @@ export default function RewardsScreen() {
   const [top5Loading, setTop5Loading] = useState(true);
   const [confirmModal, setConfirmModal] = useState(false);
   const [demandeEnCours, setDemandeEnCours] = useState(false);
+  const [nomRecompenseEnCours, setNomRecompenseEnCours] = useState<string | null>(null);
   const [historique, setHistorique] = useState<HistoriqueItem[]>([]);
 
   useEffect(() => {
@@ -108,6 +109,29 @@ export default function RewardsScreen() {
       `Demander "${recompense.nom}" pour ${recompense.points} pts ?`,
       async () => {
         setDemandeEnCours(true);
+        setNomRecompenseEnCours(recompense.nom);
+
+        // Re-fetch les points frais pour éviter la race condition
+        const { data: fresh, error: fetchErr } = await supabase
+          .from('clients')
+          .select('points')
+          .eq('id', client.id)
+          .single();
+
+        if (fetchErr || !fresh) {
+          setDemandeEnCours(false);
+          setNomRecompenseEnCours(null);
+          alerter('Erreur', 'Impossible de vérifier vos points. Réessayez.');
+          return;
+        }
+
+        if (fresh.points < recompense.points) {
+          setDemandeEnCours(false);
+          setNomRecompenseEnCours(null);
+          alerter('Points insuffisants', `Il vous faut encore ${(recompense.points - fresh.points).toLocaleString('fr-FR')} pts.`);
+          return;
+        }
+
         const { error } = await supabase.from('recompenses_utilisees').insert({
           client_id: client.id,
           recompense_nom: recompense.nom,
@@ -115,11 +139,11 @@ export default function RewardsScreen() {
           statut: 'en_attente',
         });
         setDemandeEnCours(false);
+        setNomRecompenseEnCours(null);
         if (error) {
           alerter('Erreur', error.message || "Impossible d'envoyer la demande. Réessayez.");
           return;
         }
-        // Rafraîchir l'historique
         supabase
           .from('recompenses_utilisees')
           .select('id, recompense_nom, points_depenses, created_at, statut')
@@ -198,9 +222,13 @@ export default function RewardsScreen() {
                     onPress={() => suffisant && demanderRecompense(r)}
                     activeOpacity={suffisant ? 0.8 : 1}
                     disabled={!suffisant || demandeEnCours}>
-                    <Text style={[styles.btnText, !suffisant && styles.btnLockedText]}>
-                      {suffisant ? 'Utiliser' : 'Insuffisant'}
-                    </Text>
+                    {nomRecompenseEnCours === r.nom ? (
+                      <ActivityIndicator size="small" color="#888" style={{ paddingHorizontal: 4 }} />
+                    ) : (
+                      <Text style={[styles.btnText, !suffisant && styles.btnLockedText]}>
+                        {suffisant ? 'Utiliser' : 'Insuffisant'}
+                      </Text>
+                    )}
                   </TouchableOpacity>
                 </View>
               </View>

@@ -9,6 +9,7 @@ import { supabase } from '../supabase';
 import { Client } from '../lib/types';
 import { initiales } from '../lib/utils';
 import { envoyerNotification } from '../lib/onesignal';
+import { POINTS_1H, POINTS_2H, POINTS_PENALITE } from '../lib/constants';
 
 function alerter(titre: string, message: string) {
   if (Platform.OS === 'web') {
@@ -153,9 +154,9 @@ export default function AdminScreen() {
   function retirerPoints(client: Client) {
     confirmer(
       '➖ Retirer des points',
-      `Retirer 200 pts à ${client.nom} ?`,
+      `Retirer ${POINTS_PENALITE} pts à ${client.nom} ?`,
       async () => {
-        const nouveauxPoints = Math.max(0, client.points - 200);
+        const nouveauxPoints = Math.max(0, client.points - POINTS_PENALITE);
 
         await supabase.from('clients').update({
           points: nouveauxPoints,
@@ -282,7 +283,7 @@ export default function AdminScreen() {
       supabase.from('sessions').insert({
         client_id: scanClient.id,
         points_gagnes: montant,
-        description: `Main court ${montant === 150 ? '1h' : '2h'}`,
+        description: `Entrée Trampo City ${montant === POINTS_1H ? '1h' : '2h'}`,
       }),
       supabase.from('clients').update({
         points: nouveauxPoints,
@@ -479,14 +480,14 @@ export default function AdminScreen() {
         </View>
 
         <View style={styles.clientActions}>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => ajouterPoints(c, 150)} activeOpacity={0.8}>
-            <Text style={styles.actionBtnText}>+150 pts (1h)</Text>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => ajouterPoints(c, POINTS_1H)} activeOpacity={0.8}>
+            <Text style={styles.actionBtnText}>+{POINTS_1H} pts (1h)</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => ajouterPoints(c, 300)} activeOpacity={0.8}>
-            <Text style={styles.actionBtnText}>+300 pts (2h)</Text>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => ajouterPoints(c, POINTS_2H)} activeOpacity={0.8}>
+            <Text style={styles.actionBtnText}>+{POINTS_2H} pts (2h)</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.actionBtn, styles.actionBtnRed]} onPress={() => retirerPoints(c)} activeOpacity={0.8}>
-            <Text style={styles.actionBtnRedText}>-200 pts</Text>
+            <Text style={styles.actionBtnRedText}>-{POINTS_PENALITE} pts</Text>
           </TouchableOpacity>
         </View>
 
@@ -719,11 +720,11 @@ export default function AdminScreen() {
 
                 <Text style={styles.scanQuestion}>Quelle session valider ?</Text>
 
-                <TouchableOpacity style={styles.scanActionBtn} onPress={() => validerSessionScan(150)} activeOpacity={0.8}>
-                  <Text style={styles.scanActionBtnText}>🤸 +150 pts — Session 1h</Text>
+                <TouchableOpacity style={styles.scanActionBtn} onPress={() => validerSessionScan(POINTS_1H)} activeOpacity={0.8}>
+                  <Text style={styles.scanActionBtnText}>🤸 +{POINTS_1H} pts — Session 1h</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.scanActionBtn} onPress={() => validerSessionScan(300)} activeOpacity={0.8}>
-                  <Text style={styles.scanActionBtnText}>🤸 +300 pts — Session 2h</Text>
+                <TouchableOpacity style={styles.scanActionBtn} onPress={() => validerSessionScan(POINTS_2H)} activeOpacity={0.8}>
+                  <Text style={styles.scanActionBtnText}>🤸 +{POINTS_2H} pts — Session 2h</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.scanAnnulerBtn} onPress={() => setScanClient(null)} activeOpacity={0.8}>

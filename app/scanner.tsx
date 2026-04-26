@@ -8,6 +8,7 @@ import {
 import { supabase } from '../supabase';
 import { Client } from '../lib/types';
 import { initiales } from '../lib/utils';
+import { POINTS_1H, POINTS_2H } from '../lib/constants';
 
 // ─── Web scanner : saisie manuelle de l'ID client ────────────────────────────
 
@@ -39,7 +40,7 @@ function ScannerWeb() {
       supabase.from('sessions').insert({
         client_id: client.id,
         points_gagnes: montant,
-        description: `Main court ${montant === 150 ? '1h' : '2h'}`,
+        description: `Entrée Trampo City ${montant === POINTS_1H ? '1h' : '2h'}`,
       }),
       supabase.from('clients').update({
         points: nouveauxPoints,
@@ -75,11 +76,11 @@ function ScannerWeb() {
 
         <Text style={styles.question}>Quelle session valider ?</Text>
 
-        <TouchableOpacity style={styles.btn} onPress={() => valider(150)} activeOpacity={0.8}>
-          <Text style={styles.btnText}>🤸 +150 pts — Session 1h</Text>
+        <TouchableOpacity style={styles.btn} onPress={() => valider(POINTS_1H)} activeOpacity={0.8}>
+          <Text style={styles.btnText}>🤸 +{POINTS_1H} pts — Session 1h</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.btn} onPress={() => valider(300)} activeOpacity={0.8}>
-          <Text style={styles.btnText}>🤸 +300 pts — Session 2h</Text>
+        <TouchableOpacity style={styles.btn} onPress={() => valider(POINTS_2H)} activeOpacity={0.8}>
+          <Text style={styles.btnText}>🤸 +{POINTS_2H} pts — Session 2h</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.btnAnnuler} onPress={() => { setClient(null); setIdInput(''); }} activeOpacity={0.8}>
           <Text style={styles.btnAnnulerText}>Annuler</Text>
@@ -205,7 +206,7 @@ function ScannerMobile() {
       supabase.from('sessions').insert({
         client_id: client.id,
         points_gagnes: montant,
-        description: `Main court ${montant === 150 ? '1h' : '2h'}`,
+        description: `Entrée Trampo City ${montant === POINTS_1H ? '1h' : '2h'}`,
       }),
       supabase.from('clients').update({
         points: nouveauxPoints,
@@ -276,11 +277,11 @@ function ScannerMobile() {
 
           <Text style={styles.question}>Quelle session valider ?</Text>
 
-          <TouchableOpacity style={styles.btn} onPress={() => valider(150)} activeOpacity={0.8}>
-            <Text style={styles.btnText}>🤸 +150 pts — Session 1h</Text>
+          <TouchableOpacity style={styles.btn} onPress={() => valider(POINTS_1H)} activeOpacity={0.8}>
+            <Text style={styles.btnText}>🤸 +{POINTS_1H} pts — Session 1h</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.btn} onPress={() => valider(300)} activeOpacity={0.8}>
-            <Text style={styles.btnText}>🤸 +300 pts — Session 2h</Text>
+          <TouchableOpacity style={styles.btn} onPress={() => valider(POINTS_2H)} activeOpacity={0.8}>
+            <Text style={styles.btnText}>🤸 +{POINTS_2H} pts — Session 2h</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.btnAnnuler} onPress={annuler} activeOpacity={0.8}>
             <Text style={styles.btnAnnulerText}>Annuler</Text>
