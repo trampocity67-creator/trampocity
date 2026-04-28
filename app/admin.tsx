@@ -386,20 +386,9 @@ export default function AdminScreen() {
       '🗑️ Supprimer le client',
       `Supprimer définitivement ${c.nom} et toutes ses données ? Cette action est irréversible.`,
       async () => {
-        try {
-          const { error: err1 } = await supabase.from('notifications').delete().eq('client_id', c.id);
-          if (err1) { alerter('Erreur', `Suppression notifications échouée : ${err1.message}`); return; }
-
-          const { error: err2 } = await supabase.from('recompenses_utilisees').delete().eq('client_id', c.id);
-          if (err2) { alerter('Erreur', `Suppression récompenses échouée : ${err2.message}`); return; }
-
-          const { error: err3 } = await supabase.from('sessions').delete().eq('client_id', c.id);
-          if (err3) { alerter('Erreur', `Suppression sessions échouée : ${err3.message}`); return; }
-
-          const { error: err4 } = await supabase.from('clients').delete().eq('id', c.id);
-          if (err4) { alerter('Erreur', `Suppression client échouée : ${err4.message}`); return; }
-        } catch (e: any) {
-          alerter('Erreur', `La suppression a échoué : ${e?.message ?? 'Erreur inconnue'}`);
+        const { error } = await supabase.from('clients').delete().eq('id', c.id);
+        if (error) {
+          alerter('Erreur', `La suppression a échoué : ${error.message}`);
           return;
         }
 
