@@ -1,47 +1,14 @@
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { supabase } from '../../supabase';
 import { useClient } from '../../context/ClientContext';
 import { initiales } from '../../lib/utils';
 
-interface Notification {
-  id: string;
-  client_id: string | null;
-  titre: string;
-  message: string;
-  lu: boolean;
-  created_at: string;
-}
-
 export default function ProfileScreen() {
   const { client, loading, refresh } = useClient();
   const [infoExpanded, setInfoExpanded] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-
-  useEffect(() => {
-    if (!client?.id) return;
-    chargerNotifications();
-  }, [client?.id]);
-
-  async function chargerNotifications() {
-    if (!client?.id) return;
-    const { data } = await supabase
-      .from('notifications')
-      .select('*')
-      .or(`client_id.eq.${client.id},client_id.is.null`)
-      .order('created_at', { ascending: false })
-      .limit(5);
-    setNotifications((data ?? []) as Notification[]);
-  }
-
-  async function marquerLu(notif: Notification) {
-    if (notif.lu || notif.client_id === null) return;
-    await supabase.from('notifications').update({ lu: true }).eq('id', notif.id);
-    setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, lu: true } : n));
-  }
-
   const [refreshing, setRefreshing] = useState(false);
 
   async function refreshAll() {
@@ -49,7 +16,6 @@ export default function ProfileScreen() {
     setRefreshing(true);
     try {
       await refresh();
-      await chargerNotifications();
     } finally {
       setRefreshing(false);
     }
@@ -137,37 +103,6 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        {/* Notifications */}
-        <Text style={[styles.sectionTitle, { marginTop: 12 }]}>Mes notifications</Text>
-
-        {notifications.length === 0 ? (
-          <View style={styles.notifEmpty}>
-            <Text style={styles.notifEmptyText}>Aucune notification pour l'instant</Text>
-          </View>
-        ) : (
-          notifications.map((n) => (
-            <TouchableOpacity
-              key={n.id}
-              style={[styles.notifItem, !n.lu && styles.notifItemUnread]}
-              onPress={() => marquerLu(n)}
-              activeOpacity={n.lu || n.client_id === null ? 1 : 0.8}>
-              <View style={styles.notifLeft}>
-                <Text style={styles.notifIcon}>{n.client_id === null ? '📣' : '🔔'}</Text>
-                {!n.lu && <View style={styles.notifDot} />}
-              </View>
-              <View style={styles.notifContent}>
-                <Text style={[styles.notifTitre, !n.lu && styles.notifTitreUnread]}>{n.titre}</Text>
-                <Text style={styles.notifMessage}>{n.message}</Text>
-                <Text style={styles.notifDate}>
-                  {new Date(n.created_at).toLocaleDateString('fr-FR', {
-                    day: 'numeric', month: 'long', year: 'numeric',
-                  })}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ))
-        )}
-
         <Text style={[styles.sectionTitle, { marginTop: 12 }]}>Nous trouver</Text>
 
         <View style={styles.adresseCard}>
@@ -248,29 +183,6 @@ const styles = StyleSheet.create({
   infoRowLast: { borderBottomWidth: 0 },
   infoLbl: { fontSize: 13, color: '#888' },
   infoVal: { fontSize: 13, color: '#1a1a1a', fontWeight: '500', flex: 1, textAlign: 'right' },
-  // Notifications
-  notifEmpty: {
-    backgroundColor: '#fff', borderRadius: 12, borderWidth: 0.5,
-    borderColor: '#ddd', padding: 16, alignItems: 'center', marginBottom: 8,
-  },
-  notifEmptyText: { color: '#888', fontSize: 13 },
-  notifItem: {
-    backgroundColor: '#fff', borderRadius: 12, borderWidth: 0.5,
-    borderColor: '#ddd', padding: 12, marginBottom: 8,
-    flexDirection: 'row', gap: 10,
-  },
-  notifItemUnread: { borderColor: '#F5C6C4', backgroundColor: '#FFFAFA' },
-  notifLeft: { alignItems: 'center', gap: 4, paddingTop: 1 },
-  notifIcon: { fontSize: 18 },
-  notifDot: {
-    width: 7, height: 7, borderRadius: 4,
-    backgroundColor: '#E31E24',
-  },
-  notifContent: { flex: 1 },
-  notifTitre: { fontSize: 13, fontWeight: '500', color: '#1a1a1a' },
-  notifTitreUnread: { fontWeight: '600' },
-  notifMessage: { fontSize: 12, color: '#555', marginTop: 2, lineHeight: 17 },
-  notifDate: { fontSize: 10, color: '#aaa', marginTop: 4 },
   // Adresse
   adresseCard: {
     backgroundColor: '#fff', borderRadius: 12, borderWidth: 0.5,

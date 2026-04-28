@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../../supabase';
 import { useClient } from '../../context/ClientContext';
+
+interface Notification {
+  id: string;
+  client_id: string | null;
+  titre: string;
+  message: string;
+  lu: boolean;
+  created_at: string;
+}
 
 const HORAIRES_NORMAL = [
   { jours: 'Mer · Sam · Dim', heure: '10h – 21h', ferme: false },
@@ -15,6 +24,8 @@ export default function HomeScreen() {
   const [isPwa, setIsPwa] = useState(false);
   const [classement, setClassement] = useState<{ rang: number; total: number } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifModal, setNotifModal] = useState(false);
 
   useEffect(() => {
     if (Platform.OS !== 'web') return;
@@ -28,11 +39,29 @@ export default function HomeScreen() {
       supabase.from('clients').select('id', { count: 'exact', head: true }).gt('points', client.points),
       supabase.from('clients').select('id', { count: 'exact', head: true }),
     ]).then(([devant, tous]) => {
-      const rang = (devant.count ?? 0) + 1;
-      const total = tous.count ?? 0;
-      setClassement({ rang, total });
+      setClassement({ rang: (devant.count ?? 0) + 1, total: tous.count ?? 0 });
     });
-  }, [client?.id, client?.points]);
+    chargerNotifications();
+  }, [client?.id]);
+
+  async function chargerNotifications() {
+    if (!client?.id) return;
+    const { data } = await supabase
+      .from('notifications')
+      .select('*')
+      .or(`client_id.eq.${client.id},client_id.is.null`)
+      .order('created_at', { ascending: false })
+      .limit(5);
+    setNotifications((data ?? []) as Notification[]);
+  }
+
+  async function marquerLu(notif: Notification) {
+    if (notif.lu || notif.client_id === null) return;
+    await supabase.from('notifications').update({ lu: true }).eq('id', notif.id);
+    setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, lu: true } : n));
+  }
+
+  const notifCount = notifications.filter(n => !n.lu && n.client_id !== null).length;
 
   async function chargerDonnees() {
     if (refreshing) return;
@@ -45,6 +74,7 @@ export default function HomeScreen() {
         supabase.from('clients').select('id', { count: 'exact', head: true }),
       ]);
       setClassement({ rang: (devant.count ?? 0) + 1, total: tous.count ?? 0 });
+      await chargerNotifications();
     } finally {
       setRefreshing(false);
     }
@@ -82,122 +112,174 @@ export default function HomeScreen() {
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.logo}>🤸 TRAMPO CITY</Text>
-        <Text style={styles.greeting}>Bonjour, {client?.nom?.split(' ')[0]} ! 👋</Text>
-        <TouchableOpacity style={styles.refreshBtn} onPress={chargerDonnees} activeOpacity={0.7} disabled={refreshing}>
-          <Text style={[styles.refreshIcon, refreshing && { opacity: 0.4 }]}>🔄</Text>
-        </TouchableOpacity>
-        <View style={styles.pointsCard}>
-          <Text style={styles.pointsLabel}>MES POINTS</Text>
-          <Text style={styles.pointsValue}>{client?.points?.toLocaleString('fr-FR')}</Text>
+    <View style={styles.outerContainer}>
+      <ScrollView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.logo}>🤸 TRAMPO CITY</Text>
+          <Text style={styles.greeting}>Bonjour, {client?.nom?.split(' ')[0]} ! 👋</Text>
 
-          <Text style={styles.classementLabel}>CLASSEMENT 🏆</Text>
-          {classement ? (
-            <View style={styles.classementRow}>
-              <Text style={styles.classementRang}>#{classement.rang}</Text>
-              <View style={styles.classementMeta}>
-                <Text style={styles.classementSur}>sur {classement.total} membres</Text>
-                <Text style={styles.classementHint}>votre place au classement</Text>
+          <TouchableOpacity style={styles.bellBtn} onPress={() => setNotifModal(true)} activeOpacity={0.7}>
+            <Text style={styles.bellIcon}>🔔</Text>
+            {notifCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{notifCount > 9 ? '9+' : notifCount}</Text>
               </View>
-            </View>
-          ) : (
-            <Text style={styles.classementPlaceholder}>Calcul du classement…</Text>
-          )}
-        </View>
-      </View>
+            )}
+          </TouchableOpacity>
 
-      <View style={styles.body}>
-        <View style={styles.infoCard}>
-          <Text style={styles.infoIcon}>ℹ️</Text>
-          <Text style={styles.infoText}>
-            Vos points sont ajoutés par notre équipe après chaque session.
-            Présentez votre QR code en caisse !
-          </Text>
-        </View>
+          <TouchableOpacity style={styles.refreshBtn} onPress={chargerDonnees} activeOpacity={0.7} disabled={refreshing}>
+            <Text style={[styles.refreshIcon, refreshing && { opacity: 0.4 }]}>🔄</Text>
+          </TouchableOpacity>
 
-        {/* Notifications */}
-        {Platform.OS === 'web' && (
-          notifPermission === 'granted'
-            ? <View style={styles.notifActif}><Text style={styles.notifActifText}>Notifications activées ✅</Text></View>
-            : isPwa
-              ? <TouchableOpacity style={styles.notifBtn} onPress={activerNotifications} activeOpacity={0.8}>
-                  <Text style={styles.notifBtnText}>Activer les notifications 🔔</Text>
-                </TouchableOpacity>
-              : <View style={styles.notifInstall}>
-                  <Text style={styles.notifInstallIcon}>📲</Text>
-                  <Text style={styles.notifInstallText}>
-                    Pour activer les notifications, installez l'app sur votre écran d'accueil depuis Safari
-                  </Text>
+          <View style={styles.pointsCard}>
+            <Text style={styles.pointsLabel}>MES POINTS</Text>
+            <Text style={styles.pointsValue}>{client?.points?.toLocaleString('fr-FR')}</Text>
+
+            <Text style={styles.classementLabel}>CLASSEMENT 🏆</Text>
+            {classement ? (
+              <View style={styles.classementRow}>
+                <Text style={styles.classementRang}>#{classement.rang}</Text>
+                <View style={styles.classementMeta}>
+                  <Text style={styles.classementSur}>sur {classement.total} membres</Text>
+                  <Text style={styles.classementHint}>votre place au classement</Text>
                 </View>
-        )}
-
-        {/* Horaires */}
-        <View style={styles.hoursCard}>
-          <Text style={styles.hoursTitle}>🕐 Horaires</Text>
-
-          <View style={styles.hoursSection}>
-            <Text style={styles.hoursSectionLabel}>HORS VACANCES SCOLAIRES</Text>
-            {HORAIRES_NORMAL.map(h => (
-              <View key={h.jours} style={styles.hoursRow}>
-                <Text style={styles.hoursDay}>{h.jours}</Text>
-                <Text style={[styles.hoursTime, h.ferme && styles.hoursFerme]}>{h.heure}</Text>
               </View>
-            ))}
-          </View>
-
-          <View style={styles.hoursDivider} />
-
-          <View style={styles.hoursSection}>
-            <Text style={styles.hoursSectionLabel}>VACANCES SCOLAIRES</Text>
-            <View style={styles.hoursRow}>
-              <Text style={styles.hoursDay}>Tous les jours</Text>
-              <Text style={styles.hoursTime}>10h – 21h</Text>
-            </View>
-          </View>
-
-          <View style={styles.hoursBadge}>
-            <Text style={styles.hoursBadgeText}>Dernière séance à 19h45</Text>
+            ) : (
+              <Text style={styles.classementPlaceholder}>Calcul du classement…</Text>
+            )}
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Activité récente</Text>
-
-        {sessions.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyIcon}>🤸</Text>
-            <Text style={styles.emptyText}>Pas encore de sessions</Text>
-            <Text style={styles.emptyDesc}>
-              Venez sauter chez TRAMPO CITY et gagnez vos premiers points !
+        <View style={styles.body}>
+          <View style={styles.infoCard}>
+            <Text style={styles.infoIcon}>ℹ️</Text>
+            <Text style={styles.infoText}>
+              Vos points sont ajoutés par notre équipe après chaque session.
+              Présentez votre QR code en caisse !
             </Text>
           </View>
-        ) : (
-          sessions.map((s) => (
-            <View key={s.id} style={styles.activityItem}>
-              <View style={[styles.activityIcon, { backgroundColor: s.points_gagnes > 0 ? '#FDEAEA' : '#FAECE7' }]}>
-                <Text>{s.points_gagnes > 0 ? '🤸' : '🎁'}</Text>
+
+          {Platform.OS === 'web' && (
+            notifPermission === 'granted'
+              ? <View style={styles.notifActif}><Text style={styles.notifActifText}>Notifications activées ✅</Text></View>
+              : isPwa
+                ? <TouchableOpacity style={styles.notifBtn} onPress={activerNotifications} activeOpacity={0.8}>
+                    <Text style={styles.notifBtnText}>Activer les notifications 🔔</Text>
+                  </TouchableOpacity>
+                : <View style={styles.notifInstall}>
+                    <Text style={styles.notifInstallIcon}>📲</Text>
+                    <Text style={styles.notifInstallText}>
+                      Pour activer les notifications, installez l'app sur votre écran d'accueil depuis Safari
+                    </Text>
+                  </View>
+          )}
+
+          <View style={styles.hoursCard}>
+            <Text style={styles.hoursTitle}>🕐 Horaires</Text>
+
+            <View style={styles.hoursSection}>
+              <Text style={styles.hoursSectionLabel}>HORS VACANCES SCOLAIRES</Text>
+              {HORAIRES_NORMAL.map(h => (
+                <View key={h.jours} style={styles.hoursRow}>
+                  <Text style={styles.hoursDay}>{h.jours}</Text>
+                  <Text style={[styles.hoursTime, h.ferme && styles.hoursFerme]}>{h.heure}</Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.hoursDivider} />
+
+            <View style={styles.hoursSection}>
+              <Text style={styles.hoursSectionLabel}>VACANCES SCOLAIRES</Text>
+              <View style={styles.hoursRow}>
+                <Text style={styles.hoursDay}>Tous les jours</Text>
+                <Text style={styles.hoursTime}>10h – 21h</Text>
               </View>
-              <View style={styles.activityInfo}>
-                <Text style={styles.activityName}>{s.description}</Text>
-                <Text style={styles.activityDate}>
-                  {new Date(s.created_at).toLocaleDateString('fr-FR', {
-                    day: 'numeric', month: 'long', year: 'numeric',
-                  })}
-                </Text>
-              </View>
-              <Text style={[styles.activityPts, { color: s.points_gagnes > 0 ? '#3B6D11' : '#993C1D' }]}>
-                {s.points_gagnes > 0 ? '+' : ''}{s.points_gagnes} pts
+            </View>
+
+            <View style={styles.hoursBadge}>
+              <Text style={styles.hoursBadgeText}>Dernière séance à 19h45</Text>
+            </View>
+          </View>
+
+          <Text style={styles.sectionTitle}>Activité récente</Text>
+
+          {sessions.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyIcon}>🤸</Text>
+              <Text style={styles.emptyText}>Pas encore de sessions</Text>
+              <Text style={styles.emptyDesc}>
+                Venez sauter chez TRAMPO CITY et gagnez vos premiers points !
               </Text>
             </View>
-          ))
-        )}
-      </View>
-    </ScrollView>
+          ) : (
+            sessions.map((s) => (
+              <View key={s.id} style={styles.activityItem}>
+                <View style={[styles.activityIcon, { backgroundColor: s.points_gagnes > 0 ? '#FDEAEA' : '#FAECE7' }]}>
+                  <Text>{s.points_gagnes > 0 ? '🤸' : '🎁'}</Text>
+                </View>
+                <View style={styles.activityInfo}>
+                  <Text style={styles.activityName}>{s.description}</Text>
+                  <Text style={styles.activityDate}>
+                    {new Date(s.created_at).toLocaleDateString('fr-FR', {
+                      day: 'numeric', month: 'long', year: 'numeric',
+                    })}
+                  </Text>
+                </View>
+                <Text style={[styles.activityPts, { color: s.points_gagnes > 0 ? '#3B6D11' : '#993C1D' }]}>
+                  {s.points_gagnes > 0 ? '+' : ''}{s.points_gagnes} pts
+                </Text>
+              </View>
+            ))
+          )}
+        </View>
+      </ScrollView>
+
+      <Modal visible={notifModal} transparent animationType="fade" onRequestClose={() => setNotifModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>🔔 Mes notifications</Text>
+
+            {notifications.length === 0 ? (
+              <View style={styles.notifEmptyWrap}>
+                <Text style={styles.notifEmptyText}>Aucune notification pour l'instant</Text>
+              </View>
+            ) : (
+              notifications.map((n) => (
+                <TouchableOpacity
+                  key={n.id}
+                  style={[styles.notifItem, !n.lu && styles.notifItemUnread]}
+                  onPress={() => marquerLu(n)}
+                  activeOpacity={n.lu || n.client_id === null ? 1 : 0.8}>
+                  <View style={styles.notifLeft}>
+                    <Text style={styles.notifIconText}>{n.client_id === null ? '📣' : '🔔'}</Text>
+                    {!n.lu && <View style={styles.notifDot} />}
+                  </View>
+                  <View style={styles.notifContent}>
+                    <Text style={[styles.notifTitre, !n.lu && styles.notifTitreUnread]}>{n.titre}</Text>
+                    <Text style={styles.notifMessage}>{n.message}</Text>
+                    <Text style={styles.notifDate}>
+                      {new Date(n.created_at).toLocaleDateString('fr-FR', {
+                        day: 'numeric', month: 'long', year: 'numeric',
+                      })}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
+
+            <TouchableOpacity style={styles.modalFermerBtn} onPress={() => setNotifModal(false)} activeOpacity={0.8}>
+              <Text style={styles.modalFermerText}>Fermer</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  outerContainer: { flex: 1 },
   container: { flex: 1, backgroundColor: '#f7f7f5' },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   loadingText: { color: '#888', fontSize: 14 },
@@ -282,10 +364,49 @@ const styles = StyleSheet.create({
   activityName: { fontSize: 13, fontWeight: '500', color: '#1a1a1a' },
   activityDate: { fontSize: 11, color: '#888', marginTop: 2 },
   activityPts: { fontSize: 14, fontWeight: '500' },
+  bellBtn: { position: 'absolute', top: 16, left: 16, padding: 8 },
+  bellIcon: { fontSize: 16, opacity: 0.9 },
+  badge: {
+    position: 'absolute', top: 4, right: 4,
+    backgroundColor: '#fff', borderRadius: 8,
+    minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  badgeText: { fontSize: 9, fontWeight: '700', color: '#E31E24' },
   refreshBtn: { position: 'absolute', top: 16, right: 16, padding: 8 },
   refreshIcon: { fontSize: 16, opacity: 0.8 },
   erreurIcon: { fontSize: 40, marginBottom: 8 },
   erreurText: { fontSize: 14, color: '#888', textAlign: 'center', paddingHorizontal: 32, lineHeight: 20, marginBottom: 20 },
   erreurBtn: { backgroundColor: '#E31E24', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 32 },
   erreurBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center', alignItems: 'center', padding: 20,
+  },
+  modalCard: {
+    backgroundColor: '#fff', borderRadius: 16, padding: 20,
+    width: '100%', maxWidth: 480, gap: 8,
+  },
+  modalTitle: { fontSize: 16, fontWeight: '600', color: '#1a1a1a', marginBottom: 4 },
+  notifEmptyWrap: { paddingVertical: 16, alignItems: 'center' },
+  notifEmptyText: { color: '#888', fontSize: 13 },
+  notifItem: {
+    borderRadius: 10, borderWidth: 0.5,
+    borderColor: '#ddd', padding: 10,
+    flexDirection: 'row', gap: 8,
+  },
+  notifItemUnread: { borderColor: '#F5C6C4', backgroundColor: '#FFFAFA' },
+  notifLeft: { alignItems: 'center', gap: 4, paddingTop: 1 },
+  notifIconText: { fontSize: 16 },
+  notifDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#E31E24' },
+  notifContent: { flex: 1 },
+  notifTitre: { fontSize: 13, fontWeight: '500', color: '#1a1a1a' },
+  notifTitreUnread: { fontWeight: '600' },
+  notifMessage: { fontSize: 12, color: '#555', marginTop: 2, lineHeight: 17 },
+  notifDate: { fontSize: 10, color: '#aaa', marginTop: 3 },
+  modalFermerBtn: {
+    marginTop: 4, borderRadius: 12, padding: 12, alignItems: 'center',
+    borderWidth: 0.5, borderColor: '#ddd',
+  },
+  modalFermerText: { color: '#888', fontSize: 14 },
 });
