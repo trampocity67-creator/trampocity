@@ -386,14 +386,31 @@ export default function AdminScreen() {
       '🗑️ Supprimer le client',
       `Supprimer définitivement ${c.nom} et toutes ses données ? Cette action est irréversible.`,
       async () => {
-        const { error } = await supabase.rpc('supprimer_client', { p_client_id: c.id });
+        try {
+          const steps: Array<{ table: string; error: any }> = [];
 
-        if (error) {
-          alerter('Erreur', `La suppression a échoué : ${error.message}`);
+          const n = await supabase.from('notifications').delete().eq('client_id', c.id);
+          steps.push({ table: 'notifications', error: n.error });
+
+          const r = await supabase.from('recompenses_utilisees').delete().eq('client_id', c.id);
+          steps.push({ table: 'recompenses_utilisees', error: r.error });
+
+          const s = await supabase.from('sessions').delete().eq('client_id', c.id);
+          steps.push({ table: 'sessions', error: s.error });
+
+          const cl = await supabase.from('clients').delete().eq('id', c.id);
+          steps.push({ table: 'clients', error: cl.error });
+
+          const echec = steps.find(s => s.error);
+          if (echec) {
+            alerter('Erreur', `La suppression a échoué (${echec.table}) : ${echec.error.message}`);
+            return;
+          }
+        } catch (e: any) {
+          alerter('Erreur', `La suppression a échoué : ${e?.message ?? 'Erreur inconnue'}`);
           return;
         }
 
-        // Suppression du compte auth via l'Edge Function (lookup par email côté serveur)
         try {
           await fetch('/api/delete-user', {
             method: 'POST',
