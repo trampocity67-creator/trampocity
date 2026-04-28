@@ -6,54 +6,62 @@ import { supabase } from '../supabase';
 import { initOneSignal, loginOneSignal, logoutOneSignal } from '../lib/onesignal';
 
 export default function RootLayout() {
-  // undefined = chargement | null = déconnecté | Session = connecté
   const [session, setSession] = useState<Session | null | undefined>(undefined);
-  // true quand Supabase a détecté un token de récupération de mot de passe
   const [isRecovery, setIsRecovery] = useState(false);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
   useEffect(() => {
     initOneSignal();
   }, []);
 
+  function checkAdmin(email: string) {
+    supabase.from('clients').select('is_admin').eq('email', email).single()
+      .then(({ data }) => setIsAdmin(data?.is_admin ?? false));
+  }
+
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
       if (event === 'PASSWORD_RECOVERY') {
-        // Ne pas rediriger ici : la Stack n'est peut-être pas encore montée.
-        // On lève le flag + on expose la session pour sortir du spinner.
         setIsRecovery(true);
         setSession(s ?? null);
+        setIsAdmin(false);
         return;
       }
       if (event === 'INITIAL_SESSION') {
         setSession(s ?? null);
+        if (s?.user?.email) checkAdmin(s.user.email);
+        else setIsAdmin(false);
         if (s?.user?.id) void loginOneSignal(s.user.id);
       } else if (event === 'SIGNED_IN') {
+        setIsAdmin(null);
         setSession(s);
+        if (s?.user?.email) checkAdmin(s.user.email);
+        else setIsAdmin(false);
         if (s?.user?.id) void loginOneSignal(s.user.id);
       } else if (event === 'SIGNED_OUT') {
         setIsRecovery(false);
         setSession(null);
+        setIsAdmin(null);
         void logoutOneSignal();
       }
-      // TOKEN_REFRESHED, USER_UPDATED → ignorés
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  // Redirect s'exécute APRÈS que la Stack soit montée (session !== undefined)
   useEffect(() => {
     if (session === undefined) return;
+    if (session !== null && isAdmin === null) return;
     if (isRecovery) {
       router.replace('/reset-password' as any);
     } else if (session) {
-      router.replace('/');
+      router.replace(isAdmin ? '/admin' : '/');
     } else {
       router.replace('/login');
     }
-  }, [session, isRecovery]);
+  }, [session, isRecovery, isAdmin]);
 
-  if (session === undefined) {
+  if (session === undefined || (session !== null && isAdmin === null)) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
         <ActivityIndicator size="large" color="#E31E24" />

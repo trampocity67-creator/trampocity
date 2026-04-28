@@ -48,6 +48,7 @@ export default function AdminScreen() {
   const animRef = useRef<number | null>(null);
   const { alerter, confirmer, ModalNode } = useModales();
   const [refreshing, setRefreshing] = useState(false);
+  const [isAdminUser, setIsAdminUser] = useState(false);
 
   useEffect(() => {
     verifierAdmin();
@@ -83,6 +84,7 @@ export default function AdminScreen() {
       return;
     }
 
+    setIsAdminUser(true);
     chargerClients();
   }
 
@@ -525,9 +527,11 @@ export default function AdminScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backText}>← Retour</Text>
-        </TouchableOpacity>
+        {!isAdminUser && (
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <Text style={styles.backText}>← Retour</Text>
+          </TouchableOpacity>
+        )}
         <Text style={styles.title}>Dashboard Admin 📊</Text>
         <Text style={styles.sub}>TRAMPO CITY — Gestion clients</Text>
         <TouchableOpacity style={styles.refreshBtn} onPress={chargerDonnees} activeOpacity={0.7} disabled={refreshing}>
