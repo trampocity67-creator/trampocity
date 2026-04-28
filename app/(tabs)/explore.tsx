@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator, Modal, ScrollView, StyleSheet,
   Text, TouchableOpacity, View,
@@ -8,9 +8,10 @@ import { useClient } from '../../context/ClientContext';
 import { prenomInitiale } from '../../lib/utils';
 import { useModales } from '../../hooks/useModales';
 
-interface Recompense {
+interface RecompenseCatalogue {
+  id: string;
   nom: string;
-  desc: string;
+  description: string;
   points: number;
   emoji: string;
   bg: string;
@@ -43,12 +44,8 @@ export default function RewardsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const { alerter, confirmer, ModalNode } = useModales();
 
-  const recompenses = useMemo<Recompense[]>(() => [
-    { nom: 'Boisson offerte',  desc: 'Au bar de TRAMPO CITY',        points: 200,  emoji: '🥤', bg: '#EAF3DE' },
-    { nom: 'Chaussettes grip', desc: 'Paire de chaussettes premium', points: 400,  emoji: '🧦', bg: '#FBEAF0' },
-    { nom: 'Entrée 1h offerte',desc: 'Valable en semaine',           points: 800,  emoji: '🎟️', bg: '#FDEAEA' },
-    { nom: 'Accès VIP 2h',     desc: 'Zone exclusive + boisson',     points: 2000, emoji: '⭐', bg: '#FAEEDA' },
-  ], []);
+  const [recompenses, setRecompenses] = useState<RecompenseCatalogue[]>([]);
+  const [recompensesLoading, setRecompensesLoading] = useState(true);
 
   useEffect(() => {
     supabase
@@ -59,6 +56,15 @@ export default function RewardsScreen() {
       .then(({ data }) => {
         setTop5((data ?? []) as TopClient[]);
         setTop5Loading(false);
+      });
+    supabase
+      .from('recompenses_catalogue')
+      .select('id, nom, description, points, emoji, bg')
+      .eq('actif', true)
+      .order('ordre', { ascending: true })
+      .then(({ data }) => {
+        setRecompenses((data ?? []) as RecompenseCatalogue[]);
+        setRecompensesLoading(false);
       });
   }, []);
 
@@ -77,10 +83,12 @@ export default function RewardsScreen() {
     setRefreshing(true);
     try {
       await refresh();
-      const { data: top5Data } = await supabase
-        .from('clients').select('id, nom, points')
-        .order('points', { ascending: false }).limit(5);
-      setTop5((top5Data ?? []) as TopClient[]);
+      const [top5Res, catRes] = await Promise.all([
+        supabase.from('clients').select('id, nom, points').order('points', { ascending: false }).limit(5),
+        supabase.from('recompenses_catalogue').select('id, nom, description, points, emoji, bg').eq('actif', true).order('ordre', { ascending: true }),
+      ]);
+      setTop5((top5Res.data ?? []) as TopClient[]);
+      setRecompenses((catRes.data ?? []) as RecompenseCatalogue[]);
       if (client?.id) {
         const { data: histoData } = await supabase
           .from('recompenses_utilisees')
@@ -93,7 +101,7 @@ export default function RewardsScreen() {
     }
   }
 
-  async function demanderRecompense(recompense: Recompense) {
+  async function demanderRecompense(recompense: RecompenseCatalogue) {
     if (!client) return;
     if (client.points < recompense.points) {
       alerter('Points insuffisants', `Il vous faut encore ${(recompense.points - client.points).toLocaleString('fr-FR')} pts.`);
@@ -200,16 +208,18 @@ export default function RewardsScreen() {
         {/* Récompenses */}
         <Text style={styles.sectionTitle}>Mes récompenses</Text>
 
-        {recompenses.map((r) => {
+        {recompensesLoading ? (
+          <ActivityIndicator color="#E31E24" style={{ marginTop: 8, marginBottom: 16 }} />
+        ) : recompenses.map((r) => {
           const suffisant = (client?.points ?? 0) >= r.points;
           return (
-            <View key={r.nom} style={styles.rewardCard}>
+            <View key={r.id} style={styles.rewardCard}>
               <View style={[styles.rewardImg, { backgroundColor: r.bg }]}>
                 <Text style={styles.emoji}>{r.emoji}</Text>
               </View>
               <View style={styles.rewardContent}>
                 <Text style={styles.rewardName}>{r.nom}</Text>
-                <Text style={styles.rewardDesc}>{r.desc}</Text>
+                <Text style={styles.rewardDesc}>{r.description}</Text>
                 <View style={styles.rewardFooter}>
                   <Text style={styles.rewardCost}>{r.points.toLocaleString('fr-FR')} pts</Text>
                   <TouchableOpacity

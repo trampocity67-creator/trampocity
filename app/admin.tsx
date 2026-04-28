@@ -22,12 +22,25 @@ interface Demande {
   client_points?: number;
 }
 
+interface RecompenseCatalogue {
+  id: string;
+  nom: string;
+  description: string;
+  points: number;
+  emoji: string;
+  bg: string;
+  ordre: number;
+  actif: boolean;
+}
+
+const BG_PRESETS = ['#EAF3DE', '#FBEAF0', '#FDEAEA', '#FAEEDA', '#EAF0FB', '#F0EAFB'];
+
 export default function AdminScreen() {
   const [clients, setClients] = useState<Client[]>([]);
   const [clientsFiltres, setClientsFiltres] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [recherche, setRecherche] = useState('');
-  const [onglet, setOnglet] = useState<'tous' | 'recompenses'>('tous');
+  const [onglet, setOnglet] = useState<'tous' | 'recompenses' | 'catalogue'>('tous');
   const [demandes, setDemandes] = useState<Demande[]>([]);
   const [demandesLoading, setDemandesLoading] = useState(false);
   const [notifOuverte, setNotifOuverte] = useState<string | null>(null);
@@ -49,6 +62,16 @@ export default function AdminScreen() {
   const { alerter, confirmer, ModalNode } = useModales();
   const [refreshing, setRefreshing] = useState(false);
   const [isAdminUser, setIsAdminUser] = useState(false);
+  const [catalogue, setCatalogue] = useState<RecompenseCatalogue[]>([]);
+  const [catalogueLoading, setCatalogueLoading] = useState(false);
+  const [catalogueFormModal, setCatalogueFormModal] = useState(false);
+  const [formEdit, setFormEdit] = useState<RecompenseCatalogue | null>(null);
+  const [formNom, setFormNom] = useState('');
+  const [formDesc, setFormDesc] = useState('');
+  const [formPoints, setFormPoints] = useState('');
+  const [formEmoji, setFormEmoji] = useState('🎁');
+  const [formBg, setFormBg] = useState('#FDEAEA');
+  const [formSaving, setFormSaving] = useState(false);
 
   useEffect(() => {
     verifierAdmin();
@@ -67,6 +90,7 @@ export default function AdminScreen() {
 
   useEffect(() => {
     if (onglet === 'recompenses') chargerDemandes();
+    else if (onglet === 'catalogue') chargerCatalogue();
   }, [onglet]);
 
   async function verifierAdmin() {
@@ -380,6 +404,7 @@ export default function AdminScreen() {
     setLoading(true);
     await chargerClients();
     if (onglet === 'recompenses') chargerDemandes();
+    else if (onglet === 'catalogue') chargerCatalogue();
     setRefreshing(false);
   }
 
@@ -445,6 +470,74 @@ export default function AdminScreen() {
       <View style={styles.loading}>
         <ActivityIndicator size="large" color="#E31E24" />
       </View>
+    );
+  }
+
+  async function chargerCatalogue() {
+    setCatalogueLoading(true);
+    const { data } = await supabase
+      .from('recompenses_catalogue')
+      .select('*')
+      .order('ordre', { ascending: true });
+    setCatalogue((data ?? []) as RecompenseCatalogue[]);
+    setCatalogueLoading(false);
+  }
+
+  function ouvrirFormAjout() {
+    setFormEdit(null);
+    setFormNom('');
+    setFormDesc('');
+    setFormPoints('');
+    setFormEmoji('🎁');
+    setFormBg('#FDEAEA');
+    setCatalogueFormModal(true);
+  }
+
+  function ouvrirFormEdit(r: RecompenseCatalogue) {
+    setFormEdit(r);
+    setFormNom(r.nom);
+    setFormDesc(r.description);
+    setFormPoints(String(r.points));
+    setFormEmoji(r.emoji);
+    setFormBg(r.bg);
+    setCatalogueFormModal(true);
+  }
+
+  async function sauvegarderRecompense() {
+    const nom = formNom.trim();
+    const desc = formDesc.trim();
+    const pts = parseInt(formPoints, 10);
+    if (!nom || isNaN(pts) || pts <= 0) {
+      alerter('Champs manquants', 'Nom et points (> 0) sont obligatoires.');
+      return;
+    }
+    setFormSaving(true);
+    if (formEdit) {
+      const { error } = await supabase.from('recompenses_catalogue').update({
+        nom, description: desc, points: pts, emoji: formEmoji, bg: formBg,
+      }).eq('id', formEdit.id);
+      if (error) { alerter('Erreur', error.message); setFormSaving(false); return; }
+    } else {
+      const maxOrdre = catalogue.length > 0 ? Math.max(...catalogue.map(r => r.ordre)) : 0;
+      const { error } = await supabase.from('recompenses_catalogue').insert({
+        nom, description: desc, points: pts, emoji: formEmoji, bg: formBg, ordre: maxOrdre + 1,
+      });
+      if (error) { alerter('Erreur', error.message); setFormSaving(false); return; }
+    }
+    setFormSaving(false);
+    setCatalogueFormModal(false);
+    chargerCatalogue();
+  }
+
+  function supprimerRecompenseCatalogue(r: RecompenseCatalogue) {
+    confirmer(
+      '🗑️ Supprimer la récompense',
+      `Supprimer "${r.nom}" du catalogue ?`,
+      async () => {
+        const { error } = await supabase.from('recompenses_catalogue').delete().eq('id', r.id);
+        if (error) { alerter('Erreur', error.message); return; }
+        chargerCatalogue();
+      }
     );
   }
 
@@ -576,7 +669,15 @@ export default function AdminScreen() {
           onPress={() => setOnglet('recompenses')}
           activeOpacity={0.8}>
           <Text style={[styles.ongletText, onglet === 'recompenses' && styles.ongletTextActif]}>
-            🎁 Récompenses{demandes.length > 0 ? ` (${demandes.length})` : ''}
+            🎁 Demandes{demandes.length > 0 ? ` (${demandes.length})` : ''}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.onglet, onglet === 'catalogue' && styles.ongletActif]}
+          onPress={() => setOnglet('catalogue')}
+          activeOpacity={0.8}>
+          <Text style={[styles.ongletText, onglet === 'catalogue' && styles.ongletTextActif]}>
+            ⭐ Catalogue
           </Text>
         </TouchableOpacity>
       </View>
@@ -595,7 +696,41 @@ export default function AdminScreen() {
         </View>
       )}
 
-      {onglet === 'recompenses' ? (
+      {onglet === 'catalogue' ? (
+        <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
+          <TouchableOpacity style={styles.catalogueAjouterBtn} onPress={ouvrirFormAjout} activeOpacity={0.8}>
+            <Text style={styles.catalogueAjouterText}>+ Ajouter une récompense</Text>
+          </TouchableOpacity>
+          {catalogueLoading ? (
+            <ActivityIndicator color="#E31E24" style={{ marginTop: 20 }} />
+          ) : catalogue.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>Aucune récompense dans le catalogue</Text>
+            </View>
+          ) : (
+            catalogue.map(r => (
+              <View key={r.id} style={styles.catalogueCard}>
+                <View style={[styles.catalogueEmoji, { backgroundColor: r.bg }]}>
+                  <Text style={{ fontSize: 26 }}>{r.emoji}</Text>
+                </View>
+                <View style={styles.catalogueInfo}>
+                  <Text style={styles.catalogueNom}>{r.nom}</Text>
+                  <Text style={styles.catalogueDesc}>{r.description}</Text>
+                  <Text style={styles.cataloguePts}>{r.points.toLocaleString('fr-FR')} pts</Text>
+                </View>
+                <View style={styles.catalogueActions}>
+                  <TouchableOpacity style={styles.catalogueEditBtn} onPress={() => ouvrirFormEdit(r)} activeOpacity={0.8}>
+                    <Text style={styles.catalogueEditText}>✏️</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.catalogueDeleteBtn} onPress={() => supprimerRecompenseCatalogue(r)} activeOpacity={0.8}>
+                    <Text style={styles.catalogueDeleteText}>🗑️</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))
+          )}
+        </ScrollView>
+      ) : onglet === 'recompenses' ? (
         <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
           <Text style={styles.demandesSectionTitle}>Récompenses à valider</Text>
           <Text style={styles.demandesDesc}>
@@ -820,6 +955,75 @@ export default function AdminScreen() {
           </View>
         </View>
       )}
+      {catalogueFormModal && (
+        <View style={styles.scanOverlay}>
+          <View style={styles.scanModalCard}>
+            <Text style={styles.scanModalTitle}>
+              {formEdit ? '✏️ Modifier la récompense' : '+ Nouvelle récompense'}
+            </Text>
+
+            <View style={styles.formPreviewRow}>
+              <View style={[styles.formPreviewImg, { backgroundColor: formBg }]}>
+                <Text style={{ fontSize: 26 }}>{formEmoji || '🎁'}</Text>
+              </View>
+              <TextInput
+                style={[styles.scanInput, { flex: 1 }]}
+                placeholder="Emoji"
+                value={formEmoji}
+                onChangeText={setFormEmoji}
+                placeholderTextColor="#bbb"
+              />
+            </View>
+
+            <TextInput
+              style={styles.scanInput}
+              placeholder="Nom de la récompense *"
+              value={formNom}
+              onChangeText={setFormNom}
+              placeholderTextColor="#bbb"
+            />
+            <TextInput
+              style={styles.scanInput}
+              placeholder="Description"
+              value={formDesc}
+              onChangeText={setFormDesc}
+              placeholderTextColor="#bbb"
+            />
+            <TextInput
+              style={styles.scanInput}
+              placeholder="Points requis *"
+              value={formPoints}
+              onChangeText={setFormPoints}
+              keyboardType="numeric"
+              placeholderTextColor="#bbb"
+            />
+
+            <View style={styles.formBgRow}>
+              {BG_PRESETS.map(color => (
+                <TouchableOpacity
+                  key={color}
+                  style={[styles.formBgSwatch, { backgroundColor: color }, formBg === color && styles.formBgSwatchActif]}
+                  onPress={() => setFormBg(color)}
+                />
+              ))}
+            </View>
+
+            <TouchableOpacity
+              style={[styles.scanActionBtn, (formSaving || !formNom.trim() || !formPoints.trim()) && styles.scanActionBtnDisabled]}
+              onPress={sauvegarderRecompense}
+              disabled={formSaving || !formNom.trim() || !formPoints.trim()}
+              activeOpacity={0.8}>
+              {formSaving
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.scanActionBtnText}>{formEdit ? 'Enregistrer →' : 'Ajouter →'}</Text>
+              }
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.scanFermerBtn} onPress={() => setCatalogueFormModal(false)} activeOpacity={0.8}>
+              <Text style={styles.scanFermerText}>Annuler</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
       {ModalNode}
     </View>
   );
@@ -994,4 +1198,40 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#f5c6c4', backgroundColor: '#fff5f5',
   },
   deleteBtnText: { fontSize: 16 },
+  // Catalogue
+  catalogueAjouterBtn: {
+    backgroundColor: '#0D0D0D', borderRadius: 12, padding: 14,
+    alignItems: 'center', marginBottom: 12,
+  },
+  catalogueAjouterText: { color: '#fff', fontSize: 14, fontWeight: '500' },
+  catalogueCard: {
+    backgroundColor: '#fff', borderRadius: 14, borderWidth: 0.5,
+    borderColor: '#ddd', padding: 12, marginBottom: 10,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+  },
+  catalogueEmoji: {
+    width: 52, height: 52, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  catalogueInfo: { flex: 1 },
+  catalogueNom: { fontSize: 13, fontWeight: '500', color: '#1a1a1a' },
+  catalogueDesc: { fontSize: 11, color: '#888', marginTop: 2 },
+  cataloguePts: { fontSize: 12, color: '#E31E24', fontWeight: '500', marginTop: 3 },
+  catalogueActions: { flexDirection: 'row', gap: 6 },
+  catalogueEditBtn: {
+    borderRadius: 8, padding: 8, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: '#ddd', backgroundColor: '#f7f7f5',
+  },
+  catalogueEditText: { fontSize: 14 },
+  catalogueDeleteBtn: {
+    borderRadius: 8, padding: 8, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: '#f5c6c4', backgroundColor: '#fff5f5',
+  },
+  catalogueDeleteText: { fontSize: 14 },
+  // Formulaire catalogue
+  formPreviewRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  formPreviewImg: { width: 52, height: 52, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  formBgRow: { flexDirection: 'row', gap: 8, justifyContent: 'center', paddingVertical: 4 },
+  formBgSwatch: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: 'transparent' },
+  formBgSwatchActif: { borderColor: '#1a1a1a' },
 });
