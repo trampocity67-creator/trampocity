@@ -9,7 +9,7 @@ import { supabase } from '../supabase';
 import { Client } from '../lib/types';
 import { initiales } from '../lib/utils';
 import { envoyerNotification } from '../lib/onesignal';
-import { POINTS_1H, POINTS_2H, POINTS_PENALITE } from '../lib/constants';
+import { POINTS_ENTREE, POINTS_PENALITE } from '../lib/constants';
 import { useModales } from '../hooks/useModales';
 
 interface Demande {
@@ -72,6 +72,13 @@ export default function AdminScreen() {
   const [formEmoji, setFormEmoji] = useState('🎁');
   const [formBg, setFormBg] = useState('#FDEAEA');
   const [formSaving, setFormSaving] = useState(false);
+  const [customPtsModal, setCustomPtsModal] = useState(false);
+  const [customPtsClient, setCustomPtsClient] = useState<Client | null>(null);
+  const [customPtsValeur, setCustomPtsValeur] = useState('');
+  const [customPtsDesc, setCustomPtsDesc] = useState('');
+  const [scanCustomMode, setScanCustomMode] = useState(false);
+  const [scanCustomPts, setScanCustomPts] = useState('');
+  const [scanCustomDesc, setScanCustomDesc] = useState('');
 
   useEffect(() => {
     verifierAdmin();
@@ -126,39 +133,73 @@ export default function AdminScreen() {
     setLoading(false);
   }
 
-  function ajouterPoints(client: Client, montant: number) {
+  function ajouterPointsEntree(c: Client) {
     confirmer(
       '➕ Ajouter des points',
-      `Ajouter ${montant} pts à ${client.nom} ?`,
+      `Ajouter ${POINTS_ENTREE} pts à ${c.nom} ?`,
       async () => {
-        const nouveauxPoints = client.points + montant;
-
+        const nouveauxPoints = c.points + POINTS_ENTREE;
         const [sessionRes, updateRes] = await Promise.all([
           supabase.from('sessions').insert({
-            client_id: client.id,
-            points_gagnes: montant,
+            client_id: c.id,
+            points_gagnes: POINTS_ENTREE,
             description: 'Entrée Trampo City',
           }),
-          supabase.from('clients').update({
-            points: nouveauxPoints,
-          }).eq('id', client.id),
+          supabase.from('clients').update({ points: nouveauxPoints }).eq('id', c.id),
         ]);
-
         if (sessionRes.error || updateRes.error) {
           alerter('Erreur', 'La mise à jour a échoué. Réessayez.');
           return;
         }
-
         await envoyerNotification(
-          client.id,
+          c.id,
           'TRAMPO CITY 🤸',
-          `Vous avez gagné ${montant} points ! Solde : ${nouveauxPoints.toLocaleString('fr-FR')} points 🤸`,
+          `Vous avez gagné ${POINTS_ENTREE} points ! Solde : ${nouveauxPoints.toLocaleString('fr-FR')} points 🤸`,
         );
-
-        alerter('✅ Fait !', `${client.nom} a maintenant ${nouveauxPoints.toLocaleString('fr-FR')} pts`);
+        alerter('✅ Fait !', `${c.nom} a maintenant ${nouveauxPoints.toLocaleString('fr-FR')} pts`);
         chargerClients();
       }
     );
+  }
+
+  function ajouterPointsCustom(c: Client) {
+    setCustomPtsClient(c);
+    setCustomPtsValeur('');
+    setCustomPtsDesc('');
+    setCustomPtsModal(true);
+  }
+
+  async function validerCustomPts() {
+    if (!customPtsClient) return;
+    const pts = parseInt(customPtsValeur, 10);
+    if (!pts || pts <= 0) {
+      alerter('Valeur invalide', 'Entrez un nombre de points valide (> 0).');
+      return;
+    }
+    const desc = customPtsDesc.trim() || 'Récompense';
+    const nouveauxPoints = customPtsClient.points + pts;
+    const [sessionRes, updateRes] = await Promise.all([
+      supabase.from('sessions').insert({
+        client_id: customPtsClient.id,
+        points_gagnes: pts,
+        description: desc,
+      }),
+      supabase.from('clients').update({ points: nouveauxPoints }).eq('id', customPtsClient.id),
+    ]);
+    if (sessionRes.error || updateRes.error) {
+      alerter('Erreur', 'La mise à jour a échoué. Réessayez.');
+      return;
+    }
+    await envoyerNotification(
+      customPtsClient.id,
+      'TRAMPO CITY 🎁',
+      `Vous avez gagné ${pts} points ! Solde : ${nouveauxPoints.toLocaleString('fr-FR')} points 🤸`,
+    );
+    const nom = customPtsClient.nom;
+    setCustomPtsModal(false);
+    setCustomPtsClient(null);
+    alerter('✅ Fait !', `${nom} a maintenant ${nouveauxPoints.toLocaleString('fr-FR')} pts`);
+    chargerClients();
   }
 
   function retirerPoints(client: Client) {
@@ -197,6 +238,9 @@ export default function AdminScreen() {
     setScanClient(null);
     setScanId('');
     setScanErreur(null);
+    setScanCustomMode(false);
+    setScanCustomPts('');
+    setScanCustomDesc('');
     setScanMode('saisie');
   }
 
@@ -285,7 +329,7 @@ export default function AdminScreen() {
     return () => { stopped = true; arreterCamera(); };
   }, [scanModal, scanMode]);
 
-  async function validerSessionScan(montant: number) {
+  async function validerSessionScan(montant: number, description: string) {
     if (!scanClient) return;
     const nouveauxPoints = scanClient.points + montant;
 
@@ -293,11 +337,9 @@ export default function AdminScreen() {
       supabase.from('sessions').insert({
         client_id: scanClient.id,
         points_gagnes: montant,
-        description: `Entrée Trampo City ${montant === POINTS_1H ? '1h' : '2h'}`,
+        description,
       }),
-      supabase.from('clients').update({
-        points: nouveauxPoints,
-      }).eq('id', scanClient.id),
+      supabase.from('clients').update({ points: nouveauxPoints }).eq('id', scanClient.id),
     ]);
 
     if (sessionRes.error || updateRes.error) {
@@ -318,7 +360,19 @@ export default function AdminScreen() {
     setScanClient(null);
     setScanId('');
     setScanErreur(null);
+    setScanCustomMode(false);
+    setScanCustomPts('');
+    setScanCustomDesc('');
     chargerClients();
+  }
+
+  async function validerSessionScanCustom() {
+    const pts = parseInt(scanCustomPts, 10);
+    if (!pts || pts <= 0) {
+      alerter('Valeur invalide', 'Entrez un nombre de points valide (> 0).');
+      return;
+    }
+    await validerSessionScan(pts, scanCustomDesc.trim() || 'Récompense');
   }
 
   async function chargerDemandes() {
@@ -561,11 +615,11 @@ export default function AdminScreen() {
         </View>
 
         <View style={styles.clientActions}>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => ajouterPoints(c, POINTS_1H)} activeOpacity={0.8}>
-            <Text style={styles.actionBtnText}>+{POINTS_1H} pts (1h)</Text>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => ajouterPointsEntree(c)} activeOpacity={0.8}>
+            <Text style={styles.actionBtnText}>+{POINTS_ENTREE} pts — 1 Entrée</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => ajouterPoints(c, POINTS_2H)} activeOpacity={0.8}>
-            <Text style={styles.actionBtnText}>+{POINTS_2H} pts (2h)</Text>
+          <TouchableOpacity style={[styles.actionBtn, styles.actionBtnCustom]} onPress={() => ajouterPointsCustom(c)} activeOpacity={0.8}>
+            <Text style={styles.actionBtnText}>✏️ Personnalisé</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.actionBtn, styles.actionBtnRed]} onPress={() => retirerPoints(c)} activeOpacity={0.8}>
             <Text style={styles.actionBtnRedText}>-{POINTS_PENALITE} pts</Text>
@@ -843,18 +897,50 @@ export default function AdminScreen() {
                   </View>
                 </View>
 
-                <Text style={styles.scanQuestion}>Quelle session valider ?</Text>
-
-                <TouchableOpacity style={styles.scanActionBtn} onPress={() => validerSessionScan(POINTS_1H)} activeOpacity={0.8}>
-                  <Text style={styles.scanActionBtnText}>🤸 +{POINTS_1H} pts — Session 1h</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.scanActionBtn} onPress={() => validerSessionScan(POINTS_2H)} activeOpacity={0.8}>
-                  <Text style={styles.scanActionBtnText}>🤸 +{POINTS_2H} pts — Session 2h</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.scanAnnulerBtn} onPress={() => setScanClient(null)} activeOpacity={0.8}>
-                  <Text style={styles.scanAnnulerText}>← Rechercher un autre client</Text>
-                </TouchableOpacity>
+                {!scanCustomMode ? (
+                  <>
+                    <Text style={styles.scanQuestion}>Choisissez une action :</Text>
+                    <TouchableOpacity style={styles.scanActionBtn} onPress={() => validerSessionScan(POINTS_ENTREE, 'Entrée Trampo City')} activeOpacity={0.8}>
+                      <Text style={styles.scanActionBtnText}>🤸 +{POINTS_ENTREE} pts — 1 Entrée</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.scanActionBtn, styles.scanActionBtnCustom]} onPress={() => setScanCustomMode(true)} activeOpacity={0.8}>
+                      <Text style={styles.scanActionBtnText}>✏️ Personnalisé — Récompense</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.scanAnnulerBtn} onPress={() => setScanClient(null)} activeOpacity={0.8}>
+                      <Text style={styles.scanAnnulerText}>← Rechercher un autre client</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.scanQuestion}>Ajouter des points personnalisés</Text>
+                    <TextInput
+                      style={styles.scanInput}
+                      placeholder="Nombre de points *"
+                      value={scanCustomPts}
+                      onChangeText={setScanCustomPts}
+                      keyboardType="numeric"
+                      placeholderTextColor="#bbb"
+                      autoFocus
+                    />
+                    <TextInput
+                      style={styles.scanInput}
+                      placeholder="Description (optionnelle)"
+                      value={scanCustomDesc}
+                      onChangeText={setScanCustomDesc}
+                      placeholderTextColor="#bbb"
+                    />
+                    <TouchableOpacity
+                      style={[styles.scanActionBtn, (!scanCustomPts.trim() || !(parseInt(scanCustomPts, 10) > 0)) && styles.scanActionBtnDisabled]}
+                      onPress={validerSessionScanCustom}
+                      disabled={!scanCustomPts.trim() || !(parseInt(scanCustomPts, 10) > 0)}
+                      activeOpacity={0.8}>
+                      <Text style={styles.scanActionBtnText}>Valider →</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.scanAnnulerBtn} onPress={() => { setScanCustomMode(false); setScanCustomPts(''); setScanCustomDesc(''); }} activeOpacity={0.8}>
+                      <Text style={styles.scanAnnulerText}>← Retour</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
               </>
             ) : (
               <>
@@ -1024,6 +1110,42 @@ export default function AdminScreen() {
           </View>
         </View>
       )}
+      {customPtsModal && customPtsClient && (
+        <View style={styles.scanOverlay}>
+          <View style={styles.scanModalCard}>
+            <Text style={styles.scanModalTitle}>✏️ Points personnalisés</Text>
+            <Text style={styles.scanModalDesc}>
+              {customPtsClient.nom} — {customPtsClient.points.toLocaleString('fr-FR')} pts actuels
+            </Text>
+            <TextInput
+              style={styles.scanInput}
+              placeholder="Nombre de points *"
+              value={customPtsValeur}
+              onChangeText={setCustomPtsValeur}
+              keyboardType="numeric"
+              placeholderTextColor="#bbb"
+              autoFocus
+            />
+            <TextInput
+              style={styles.scanInput}
+              placeholder="Description (optionnelle)"
+              value={customPtsDesc}
+              onChangeText={setCustomPtsDesc}
+              placeholderTextColor="#bbb"
+            />
+            <TouchableOpacity
+              style={[styles.scanActionBtn, (!customPtsValeur.trim() || !(parseInt(customPtsValeur, 10) > 0)) && styles.scanActionBtnDisabled]}
+              onPress={validerCustomPts}
+              disabled={!customPtsValeur.trim() || !(parseInt(customPtsValeur, 10) > 0)}
+              activeOpacity={0.8}>
+              <Text style={styles.scanActionBtnText}>Valider →</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.scanFermerBtn} onPress={() => { setCustomPtsModal(false); setCustomPtsClient(null); }} activeOpacity={0.8}>
+              <Text style={styles.scanFermerText}>Annuler</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
       {ModalNode}
     </View>
   );
@@ -1090,6 +1212,7 @@ const styles = StyleSheet.create({
   clientActions: { flexDirection: 'row', gap: 8, marginBottom: 8 },
   actionBtn: { flex: 1, backgroundColor: '#E31E24', borderRadius: 10, padding: 8, alignItems: 'center' },
   actionBtnText: { color: '#fff', fontSize: 11, fontWeight: '500' },
+  actionBtnCustom: { backgroundColor: '#555' },
   actionBtnRed: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#E24B4A' },
   actionBtnRedText: { color: '#E24B4A', fontSize: 11, fontWeight: '500' },
   notifBtn: {
@@ -1141,6 +1264,7 @@ const styles = StyleSheet.create({
   scanPtsLbl: { fontSize: 10, color: '#888' },
   scanQuestion: { fontSize: 13, color: '#888', textAlign: 'center', marginVertical: 4 },
   scanActionBtn: { backgroundColor: '#E31E24', borderRadius: 12, padding: 14, alignItems: 'center' },
+  scanActionBtnCustom: { backgroundColor: '#555' },
   scanActionBtnDisabled: { opacity: 0.45 },
   scanActionBtnText: { color: '#fff', fontSize: 14, fontWeight: '500' },
   scanAnnulerBtn: { alignItems: 'center', paddingVertical: 6 },

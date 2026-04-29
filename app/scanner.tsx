@@ -8,7 +8,7 @@ import {
 import { supabase } from '../supabase';
 import { Client } from '../lib/types';
 import { initiales } from '../lib/utils';
-import { POINTS_1H, POINTS_2H } from '../lib/constants';
+import { POINTS_ENTREE } from '../lib/constants';
 import { useModales } from '../hooks/useModales';
 
 // ─── Web scanner : saisie manuelle de l'ID client ────────────────────────────
@@ -18,6 +18,9 @@ function ScannerWeb() {
   const [loading, setLoading] = useState(false);
   const [client, setClient] = useState<Client | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [customMode, setCustomMode] = useState(false);
+  const [customPts, setCustomPts] = useState('');
+  const [customDesc, setCustomDesc] = useState('');
   const { alerter, ModalNode } = useModales();
 
   async function rechercherClient() {
@@ -34,7 +37,7 @@ function ScannerWeb() {
     setClient(data as Client);
   }
 
-  async function valider(montant: number) {
+  async function valider(montant: number, description: string) {
     if (!client) return;
     const nouveauxPoints = client.points + montant;
 
@@ -42,11 +45,9 @@ function ScannerWeb() {
       supabase.from('sessions').insert({
         client_id: client.id,
         points_gagnes: montant,
-        description: `Entrée Trampo City ${montant === POINTS_1H ? '1h' : '2h'}`,
+        description,
       }),
-      supabase.from('clients').update({
-        points: nouveauxPoints,
-      }).eq('id', client.id),
+      supabase.from('clients').update({ points: nouveauxPoints }).eq('id', client.id),
     ]);
 
     if (sessionRes.error || updateRes.error) {
@@ -57,6 +58,17 @@ function ScannerWeb() {
 
     setClient(null);
     setIdInput('');
+    setCustomMode(false);
+    setCustomPts('');
+    setCustomDesc('');
+  }
+
+  function annuler() {
+    setClient(null);
+    setIdInput('');
+    setCustomMode(false);
+    setCustomPts('');
+    setCustomDesc('');
   }
 
   return (
@@ -78,17 +90,54 @@ function ScannerWeb() {
             </View>
           </View>
 
-          <Text style={styles.question}>Quelle session valider ?</Text>
+          <Text style={styles.question}>Choisissez une action :</Text>
 
-          <TouchableOpacity style={styles.btn} onPress={() => valider(POINTS_1H)} activeOpacity={0.8}>
-            <Text style={styles.btnText}>🤸 +{POINTS_1H} pts — Session 1h</Text>
+          <TouchableOpacity style={styles.btn} onPress={() => valider(POINTS_ENTREE, 'Entrée Trampo City')} activeOpacity={0.8}>
+            <Text style={styles.btnText}>🤸 +{POINTS_ENTREE} pts — 1 Entrée</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.btn} onPress={() => valider(POINTS_2H)} activeOpacity={0.8}>
-            <Text style={styles.btnText}>🤸 +{POINTS_2H} pts — Session 2h</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.btnAnnuler} onPress={() => { setClient(null); setIdInput(''); }} activeOpacity={0.8}>
-            <Text style={styles.btnAnnulerText}>Annuler</Text>
-          </TouchableOpacity>
+
+          {customMode ? (
+            <>
+              <TextInput
+                style={styles.customInput}
+                placeholder="Nombre de points *"
+                value={customPts}
+                onChangeText={setCustomPts}
+                keyboardType="numeric"
+                placeholderTextColor="#bbb"
+                autoFocus
+              />
+              <TextInput
+                style={styles.customInput}
+                placeholder="Description (optionnelle)"
+                value={customDesc}
+                onChangeText={setCustomDesc}
+                placeholderTextColor="#bbb"
+              />
+              <TouchableOpacity
+                style={[styles.btn, (!customPts.trim() || !(parseInt(customPts, 10) > 0)) && styles.btnDisabled]}
+                onPress={() => {
+                  const pts = parseInt(customPts, 10);
+                  if (pts > 0) valider(pts, customDesc.trim() || 'Récompense');
+                }}
+                disabled={!customPts.trim() || !(parseInt(customPts, 10) > 0)}
+                activeOpacity={0.8}>
+                <Text style={styles.btnText}>Valider →</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.btnAnnuler} onPress={() => { setCustomMode(false); setCustomPts(''); setCustomDesc(''); }} activeOpacity={0.8}>
+                <Text style={styles.btnAnnulerText}>← Retour</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <TouchableOpacity style={[styles.btn, styles.btnCustom]} onPress={() => setCustomMode(true)} activeOpacity={0.8}>
+                <Text style={styles.btnText}>✏️ Personnalisé — Récompense</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.btnAnnuler} onPress={annuler} activeOpacity={0.8}>
+                <Text style={styles.btnAnnulerText}>Annuler</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       ) : (
         <View style={styles.webContainer}>
@@ -154,6 +203,9 @@ function ScannerMobile() {
   const [loading, setLoading] = useState(false);
   const [client, setClient] = useState<Client | null>(null);
   const [modal, setModal] = useState(false);
+  const [customMode, setCustomMode] = useState(false);
+  const [customPts, setCustomPts] = useState('');
+  const [customDesc, setCustomDesc] = useState('');
   const { alerter, ModalNode } = useModales();
 
   if (!permission) return <View style={styles.container} />;
@@ -200,7 +252,7 @@ function ScannerMobile() {
     setModal(true);
   }
 
-  async function valider(montant: number) {
+  async function valider(montant: number, description: string) {
     if (!client) return;
     setModal(false);
 
@@ -210,11 +262,9 @@ function ScannerMobile() {
       supabase.from('sessions').insert({
         client_id: client.id,
         points_gagnes: montant,
-        description: `Entrée Trampo City ${montant === POINTS_1H ? '1h' : '2h'}`,
+        description,
       }),
-      supabase.from('clients').update({
-        points: nouveauxPoints,
-      }).eq('id', client.id),
+      supabase.from('clients').update({ points: nouveauxPoints }).eq('id', client.id),
     ]);
 
     if (sessionRes.error || updateRes.error) {
@@ -228,12 +278,18 @@ function ScannerMobile() {
 
     setClient(null);
     setScanned(false);
+    setCustomMode(false);
+    setCustomPts('');
+    setCustomDesc('');
   }
 
   function annuler() {
     setModal(false);
     setClient(null);
     setScanned(false);
+    setCustomMode(false);
+    setCustomPts('');
+    setCustomDesc('');
   }
 
   return (
@@ -280,17 +336,54 @@ function ScannerMobile() {
             </View>
           </View>
 
-          <Text style={styles.question}>Quelle session valider ?</Text>
+          <Text style={styles.question}>Choisissez une action :</Text>
 
-          <TouchableOpacity style={styles.btn} onPress={() => valider(POINTS_1H)} activeOpacity={0.8}>
-            <Text style={styles.btnText}>🤸 +{POINTS_1H} pts — Session 1h</Text>
+          <TouchableOpacity style={styles.btn} onPress={() => valider(POINTS_ENTREE, 'Entrée Trampo City')} activeOpacity={0.8}>
+            <Text style={styles.btnText}>🤸 +{POINTS_ENTREE} pts — 1 Entrée</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.btn} onPress={() => valider(POINTS_2H)} activeOpacity={0.8}>
-            <Text style={styles.btnText}>🤸 +{POINTS_2H} pts — Session 2h</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.btnAnnuler} onPress={annuler} activeOpacity={0.8}>
-            <Text style={styles.btnAnnulerText}>Annuler</Text>
-          </TouchableOpacity>
+
+          {customMode ? (
+            <>
+              <TextInput
+                style={styles.customInput}
+                placeholder="Nombre de points *"
+                value={customPts}
+                onChangeText={setCustomPts}
+                keyboardType="numeric"
+                placeholderTextColor="#bbb"
+                autoFocus
+              />
+              <TextInput
+                style={styles.customInput}
+                placeholder="Description (optionnelle)"
+                value={customDesc}
+                onChangeText={setCustomDesc}
+                placeholderTextColor="#bbb"
+              />
+              <TouchableOpacity
+                style={[styles.btn, (!customPts.trim() || !(parseInt(customPts, 10) > 0)) && styles.btnDisabled]}
+                onPress={() => {
+                  const pts = parseInt(customPts, 10);
+                  if (pts > 0) valider(pts, customDesc.trim() || 'Récompense');
+                }}
+                disabled={!customPts.trim() || !(parseInt(customPts, 10) > 0)}
+                activeOpacity={0.8}>
+                <Text style={styles.btnText}>Valider →</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.btnAnnuler} onPress={() => { setCustomMode(false); setCustomPts(''); setCustomDesc(''); }} activeOpacity={0.8}>
+                <Text style={styles.btnAnnulerText}>← Retour</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <TouchableOpacity style={[styles.btn, styles.btnCustom]} onPress={() => setCustomMode(true)} activeOpacity={0.8}>
+                <Text style={styles.btnText}>✏️ Personnalisé — Récompense</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.btnAnnuler} onPress={annuler} activeOpacity={0.8}>
+                <Text style={styles.btnAnnulerText}>Annuler</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       )}
     </View>
@@ -340,6 +433,7 @@ const styles = StyleSheet.create({
   infoLbl: { fontSize: 11, color: '#888', marginTop: 2 },
   question: { fontSize: 14, color: '#888', textAlign: 'center' },
   btn: { backgroundColor: '#E31E24', borderRadius: 12, padding: 16, alignItems: 'center' },
+  btnCustom: { backgroundColor: '#555' },
   btnDisabled: { opacity: 0.5 },
   btnText: { color: '#fff', fontSize: 15, fontWeight: '500' },
   btnAnnuler: {
@@ -347,6 +441,10 @@ const styles = StyleSheet.create({
     alignItems: 'center', borderWidth: 0.5, borderColor: '#ddd',
   },
   btnAnnulerText: { color: '#888', fontSize: 15 },
+  customInput: {
+    backgroundColor: '#fff', borderRadius: 12, borderWidth: 0.5,
+    borderColor: '#ddd', padding: 14, fontSize: 14, color: '#1a1a1a',
+  },
   // Web fallback
   webContainer: { flex: 1, backgroundColor: '#f7f7f5', padding: 24, paddingTop: 60 },
   webCard: {
