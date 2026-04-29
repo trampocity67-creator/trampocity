@@ -62,7 +62,8 @@ export default function RewardsScreen() {
       .select('id, nom, description, points, emoji, bg')
       .eq('actif', true)
       .order('ordre', { ascending: true })
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) console.error('[explore] recompenses_catalogue:', error.message);
         setRecompenses((data ?? []) as RecompenseCatalogue[]);
         setRecompensesLoading(false);
       });
@@ -210,6 +211,10 @@ export default function RewardsScreen() {
 
         {recompensesLoading ? (
           <ActivityIndicator color="#E31E24" style={{ marginTop: 8, marginBottom: 16 }} />
+        ) : recompenses.length === 0 ? (
+          <Text style={{ color: '#aaa', textAlign: 'center', marginVertical: 16 }}>
+            Aucune récompense disponible
+          </Text>
         ) : recompenses.map((r) => {
           const suffisant = (client?.points ?? 0) >= r.points;
           return (
