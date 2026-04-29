@@ -14,7 +14,7 @@ interface RecompenseCatalogue {
   description: string;
   points: number;
   emoji: string;
-  bg: string;
+  couleur: string;
 }
 
 interface TopClient {
@@ -59,7 +59,7 @@ export default function RewardsScreen() {
       });
     supabase
       .from('recompenses_catalogue')
-      .select('id, nom, description, points, emoji, bg')
+      .select('id, nom, description, points, emoji, couleur')
       .eq('actif', true)
       .order('ordre', { ascending: true })
       .then(({ data, error }) => {
@@ -86,7 +86,7 @@ export default function RewardsScreen() {
       await refresh();
       const [top5Res, catRes] = await Promise.all([
         supabase.from('clients').select('id, nom, points').order('points', { ascending: false }).limit(5),
-        supabase.from('recompenses_catalogue').select('id, nom, description, points, emoji, bg').eq('actif', true).order('ordre', { ascending: true }),
+        supabase.from('recompenses_catalogue').select('id, nom, description, points, emoji, couleur').eq('actif', true).order('ordre', { ascending: true }),
       ]);
       setTop5((top5Res.data ?? []) as TopClient[]);
       setRecompenses((catRes.data ?? []) as RecompenseCatalogue[]);
@@ -219,7 +219,7 @@ export default function RewardsScreen() {
           const suffisant = (client?.points ?? 0) >= r.points;
           return (
             <View key={r.id} style={styles.rewardCard}>
-              <View style={[styles.rewardImg, { backgroundColor: r.bg }]}>
+              <View style={[styles.rewardImg, { backgroundColor: r.couleur }]}>
                 <Text style={styles.emoji}>{r.emoji}</Text>
               </View>
               <View style={styles.rewardContent}>
